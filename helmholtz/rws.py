@@ -21,10 +21,10 @@ from blocks.initialization import Uniform, IsotropicGaussian, Constant, Sparse, 
 from blocks.select import Selector
 from blocks.roles import PARAMETER
 
+from helmholtz import HelmholtzMachine, flatten_values, unflatten_values
 
 from myutils import merge_gradients, RWSInitialization
 from prob_layers import replicate_batch, logsumexp
-from prob_layers import BernoulliTopLayer, BernoulliLayer
 
 logger = logging.getLogger(__name__)
 floatX = theano.config.floatX
@@ -137,6 +137,7 @@ class ReweightedWakeSleep(HelmholtzMachine):
         return subsamples, log_w
 
     def importance_weights(self, samples, log_p, log_q, n_samples):
+        """ Calculate importance weights for the given samples """
         p_layers = self.p_layers
         q_layers = self.q_layers
         n_layers = len(p_layers)
@@ -149,9 +150,7 @@ class ReweightedWakeSleep(HelmholtzMachine):
         log_q_all = sum(log_q)   # This is the python sum over a list
     
         # Calculate sampling weights
-        log_pq = (log_p_all-log_q_all)/2-tensor.log(n_samples)
-        #log_pq = (log_p_all-log_q_all)-tensor.log(n_samples)
-        #log_pq = (log_p_all-tensor.log(n_samples))
+        log_pq = (log_p_all-log_q_all)-tensor.log(n_samples)
         w_norm = logsumexp(log_pq, axis=1)
         log_w = log_pq-tensor.shape_padright(w_norm)
         w = tensor.exp(log_w)
@@ -229,7 +228,9 @@ class ReweightedWakeSleep(HelmholtzMachine):
             gradients = merge_gradients(gradients, q_layers[l].get_gradients(samples[l+1], samples[l], weights=w))
         gradients = merge_gradients(gradients, p_layers[-1].get_gradients(samples[-1], weights=w))
 
+        return log_px, log_psx, gradients
 
+        """
         if self.zreg > 0.0:
             #zreg = batch_size * numpy.float32(self.zreg)
             #zreg = numpy.float32(self.zreg)
@@ -258,8 +259,7 @@ class ReweightedWakeSleep(HelmholtzMachine):
                             q_layers[l].get_gradients(samples[l+1], samples[l], weights=w),
                             scale=zreg)
  
-
-        return log_px, log_psx, gradients
+        """
 
         """
         if True:

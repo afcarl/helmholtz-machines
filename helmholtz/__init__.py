@@ -178,7 +178,7 @@ def create_layers(layer_spec, data_dim, deterministic_layers=0, deterministic_ac
 
 
 class HelmholtzMachine(Initializable, Random):
-    def __init__(self, p_layers, q_layer, **kwwargs):
+    def __init__(self, p_layers, q_layers, **kwargs):
         super(HelmholtzMachine, self).__init__(**kwargs)
         
         self.p_layers = p_layers

@@ -21,10 +21,10 @@ from blocks.initialization import Uniform, IsotropicGaussian, Constant, Sparse, 
 from blocks.select import Selector
 from blocks.roles import PARAMETER
 
+from helmholtz import HelmholtzMachine
 
 from myutils import merge_gradients, RWSInitialization
 from prob_layers import replicate_batch, logsumexp
-from prob_layers import BernoulliTopLayer, BernoulliLayer
 
 logger = logging.getLogger(__name__)
 floatX = theano.config.floatX
