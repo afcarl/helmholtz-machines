@@ -73,7 +73,7 @@ class ProbabilisticTopLayer(Random):
         raise NotImplemented
 
     def get_gradients(self, X, weights=1.):
-        cost = -(weights * self.log_prob(X)).mean()
+        cost = -(weights * self.log_prob(X)).sum()
  
         params = Selector(self).get_params()
         
@@ -98,7 +98,7 @@ class ProbabilisticLayer(Random):
         raise NotImplemented
 
     def get_gradients(self, X, Y, weights=1.):
-        cost = -(weights * self.log_prob(X, Y)).mean()
+        cost = -(weights * self.log_prob(X, Y)).sum()
         
         params = Selector(self).get_params()
 
