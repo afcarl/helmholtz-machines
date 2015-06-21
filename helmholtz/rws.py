@@ -82,7 +82,7 @@ class ReweightedWakeSleep(HelmholtzMachine):
     
         return samples, log_p, log_q
 
-    @application(inputs=['features'], outputs=['samples', 'log_q', 'log_p'])
+    @application(inputs=['features'], outputs=['samples', 'log_p', 'log_q'])
     def sample_q(self, features):
         """Sample from q(h|x).
 

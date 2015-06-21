@@ -253,10 +253,8 @@ def main(data, batch_size, learning_rate, epochs, n_samples, layer_spec, determi
                     #    after_epoch=False,
                     #    after_batch=False,
                     #    every_n_epochs=half_lr),
+                    TrackTheBest('valid_log_p'),
                     TrackTheBest('valid_log_ph'),
-                    TrackTheBest('valid_log_h'),
-                    TrackTheBest('test_log_ph'),
-                    TrackTheBest('test_log_h'),
                     Checkpoint(name+".pkl", save_separately=['log', 'model']),
                     Plot(
                         name,
