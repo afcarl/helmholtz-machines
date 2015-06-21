@@ -78,8 +78,12 @@ class ProbabilisticTopLayer(Random):
         params = Selector(self).get_params()
         
         gradients = OrderedDict()
-        for pname, param in params.iteritems():
-            gradients[param] = tensor.grad(cost, param, consider_constant=[X, weights])
+        if isinstance(weights, float):
+            for pname, param in params.iteritems():
+                gradients[param] = tensor.grad(cost, param, consider_constant=[X])
+        else:
+            for pname, param in params.iteritems():
+                gradients[param] = tensor.grad(cost, param, consider_constant=[X, weights])
             
         return gradients
 
@@ -103,8 +107,12 @@ class ProbabilisticLayer(Random):
         params = Selector(self).get_params()
 
         gradients = OrderedDict()
-        for pname, param in params.iteritems():
-            gradients[param] = tensor.grad(cost, param, consider_constant=[X, Y, weights])
+        if isinstance(weights, float):
+            for pname, param in params.iteritems():
+                gradients[param] = tensor.grad(cost, param, consider_constant=[X, Y])
+        else:
+            for pname, param in params.iteritems():
+                gradients[param] = tensor.grad(cost, param, consider_constant=[X, Y, weights])
             
         return gradients
 
