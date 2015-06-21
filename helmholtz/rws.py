@@ -4,7 +4,6 @@ from __future__ import division, print_function
 import sys
 sys.path.append("../")
 
-import re
 import logging
 
 import numpy
@@ -14,12 +13,7 @@ from theano import tensor
 from collections import OrderedDict
 
 from blocks.bricks.base import application, Brick, lazy
-from blocks.bricks import Random, Initializable, MLP, Tanh, Logistic
-from blocks.filter import VariableFilter
-from blocks.graph import ComputationGraph
-from blocks.initialization import Uniform, IsotropicGaussian, Constant, Sparse, Identity
 from blocks.select import Selector
-from blocks.roles import PARAMETER
 
 from helmholtz import HelmholtzMachine, flatten_values, unflatten_values
 
@@ -37,7 +31,7 @@ class ReweightedWakeSleep(HelmholtzMachine):
         super(ReweightedWakeSleep, self).__init__(p_layers, q_layers, **kwargs)
 
     def log_prob_p(self, samples):
-        """ Calculate p(h_l | h_{l+1}) for all layers.  """
+        """Calculate p(h_l | h_{l+1}) for all layers.  """
         n_layers = len(self.p_layers)
         n_samples = samples[0].shape[0]
 
@@ -49,7 +43,16 @@ class ReweightedWakeSleep(HelmholtzMachine):
         return log_p
 
     def log_prob_q(self, samples):
-        """ Calculate q(h_{l+1} | h_l_ for all layers *but the first one*.  """
+        """Calculate q(h_{l+1} | h_l) for all layers *but the first one*.  
+
+        Parameters
+        ----------
+        samples : list 
+
+        Returns
+        -------
+        log_q : list 
+        """
         n_layers = len(self.p_layers)
         n_samples = samples[0].shape[0]
 
@@ -60,9 +63,9 @@ class ReweightedWakeSleep(HelmholtzMachine):
 
         return log_q
 
-    #@application(inputs=['n_samples'], outputs=['samples', 
+    @application(inputs=['n_samples'], outputs=['samples', 'log_p', 'log_q'])
     def sample_p(self, n_samples):
-        """
+        """Samples form the prior.
         """
         p_layers = self.p_layers
         q_layers = self.q_layers
@@ -80,9 +83,20 @@ class ReweightedWakeSleep(HelmholtzMachine):
     
         return samples, log_p, log_q
 
-    #@application(inputs=['features'], 
-    #             outputs=['samples', 'log_q', 'log_p'])
+    @application(inputs=['features'], outputs=['samples', 'log_q', 'log_p'])
     def sample_q(self, features):
+        """Sample from q(h|x).
+
+        Parameters 
+        ----------
+        features : Tensor
+
+        Returns 
+        -------
+        samples : list
+        log_p : list
+        log_q : list
+        """
         p_layers = self.p_layers
         q_layers = self.q_layers
         n_layers = len(p_layers)
@@ -108,33 +122,8 @@ class ReweightedWakeSleep(HelmholtzMachine):
 
     #@application(inputs=['n_samples'], 
     #             outputs=['samples', 'log_q', 'log_p'])
-    def sample(self, n_samples, oversample=100, n_inner=10):
-        p_layers = self.p_layers
-        q_layers = self.q_layers
-        n_layers = len(p_layers)
-
-        n_primary = n_samples*oversample
-
-        samples, log_p, log_q = self.sample_p(n_primary)
-
-        # Sum all layers
-        log_p_all = sum(log_p)   # This is the python sum over a list
-        log_q_all = sum(log_q)   # This is the python sum over a list
-
-        _, log_qx = self.log_likelihood(samples[0], n_inner)
-
-        log_w = (log_qx + log_q_all - log_p_all) / 2
-        w_norm = logsumexp(log_w, axis=0)
-        log_w = log_w-w_norm
-        w = tensor.exp(log_w)
-
-        #pvals = w.repeat(n_samples, axis=0)
-        pvals = w.dimshuffle('x', 0).repeat(n_samples, axis=0)
-        idx = self.theano_rng.multinomial(pvals=pvals).argmax(axis=1)
-
-        subsamples = [s[idx,:] for s in samples]
-    
-        return subsamples, log_w
+    def sample(self, n_samples):
+        return self.sample_p(n_amples)
 
     def importance_weights(self, samples, log_p, log_q, n_samples):
         """ Calculate importance weights for the given samples """
@@ -156,7 +145,6 @@ class ReweightedWakeSleep(HelmholtzMachine):
         w = tensor.exp(log_w)
         
         return w 
-        
 
     @application(inputs=['features', 'n_samples'], outputs=['log_px', 'log_psx'])
     def log_likelihood(self, features, n_samples):
