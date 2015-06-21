@@ -114,7 +114,7 @@ def create_layers(layer_spec, data_dim, deterministic_layers=0, deterministic_ac
     inits = {
         'weights_init': RWSInitialization(factor=1.),
 #        'weights_init': IsotropicGaussian(0.1),
-        'biases_init': Constant(-5.0),
+        'biases_init': Constant(-1.0),
     }
 
     m = re.match("(\d*\.?\d*)x-(\d+)l-(\d+)", layer_spec)
