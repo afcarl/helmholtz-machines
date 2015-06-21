@@ -22,8 +22,7 @@ from blocks.select import Selector
 from blocks.roles import PARAMETER
 
 from helmholtz import HelmholtzMachine
-
-from myutils import merge_gradients, RWSInitialization
+from helmholtz import merge_gradients, flatten_values, unflatten_values
 from prob_layers import replicate_batch, logsumexp
 
 logger = logging.getLogger(__name__)

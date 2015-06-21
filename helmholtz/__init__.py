@@ -4,12 +4,13 @@ from __future__ import division, print_function
 import sys
 sys.path.append("../")
 
-import re
-import logging
 
+import logging
 import numpy
+import re
 import theano
 
+from abc import ABCMeta, abstractmethod
 from theano import tensor
 from collections import OrderedDict
 
@@ -21,14 +22,13 @@ from blocks.initialization import Uniform, IsotropicGaussian, Constant, Sparse, 
 from blocks.select import Selector
 from blocks.roles import PARAMETER
 
-from myutils import merge_gradients, RWSInitialization
+from initialization import RWSInitialization
 from prob_layers import replicate_batch, logsumexp
 from prob_layers import BernoulliTopLayer, BernoulliLayer
 
 logger = logging.getLogger(__name__)
 floatX = theano.config.floatX
 
-#-----------------------------------------------------------------------------
 
 def flatten_values(vals, size):
     """ Flatten a list of Theano tensors.
@@ -86,7 +86,22 @@ def unflatten_values(vals, batch_size, n_samples):
         return [v.reshape([batch_size, n_samples, v.shape[1]]) for v in vals]
     raise 
 
-#-----------------------------------------------------------------------------
+
+def merge_gradients(old_gradients, new_gradients, scale=1.):
+    """Take and merge multiple ordered dicts 
+    """
+    if isinstance(new_gradients, (dict, OrderedDict)):
+        new_gradients = [new_gradients]
+
+    for gradients in new_gradients:
+        assert isinstance(gradients, (dict, OrderedDict))
+        for key, val in gradients.items():
+            if old_gradients.has_key(key):
+                old_gradients[key] = old_gradients[key] + scale * val
+            else:       
+                old_gradients[key] = scale * val
+    return old_gradients
+
 
 def create_layers(layer_spec, data_dim, deterministic_layers=0, deterministic_act=None, deterministic_size=1.):
     """
@@ -213,3 +228,29 @@ class HelmholtzMachine(Initializable, Random):
                 assert Wp.shape == Wq.T.shape
                 qtrafo.W.set_value(Wp.T)    
         """
+
+#-----------------------------------------------------------------------------
+
+
+class GradientMonitor(object):
+    def __init__(self, gradients, prefix=""):
+        self.gradients = gradients
+        self.prefix = prefix
+        pass
+
+    def vars(self):
+        prefix = self.prefix 
+        monitor_vars = []
+
+        aggregators = {
+            'min':   tensor.min,
+            'max':   tensor.max,
+            'mean':  tensor.mean,
+        }
+
+        for key, value in six.iteritems(self.gradients):
+            min = tensor.min(value)
+            ipdb.set_trace()
+            monitor_vars.append(monitor_vars)
+
+        return monitor_vars

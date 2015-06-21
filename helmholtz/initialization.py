@@ -1,35 +1,10 @@
 
 from __future__ import division
 
-from abc import ABCMeta, abstractmethod
-
-import ipdb
 import numpy
-import six
-import theano
 
-from collections import OrderedDict
-
-from theano import tensor
 from blocks.initialization import NdarrayInitialization, Uniform
 
-
-def merge_gradients(old_gradients, new_gradients, scale=1.):
-    """Take and merge multiple ordered dicts 
-    """
-    if isinstance(new_gradients, (dict, OrderedDict)):
-        new_gradients = [new_gradients]
-
-    for gradients in new_gradients:
-        assert isinstance(gradients, (dict, OrderedDict))
-        for key, val in gradients.items():
-            if old_gradients.has_key(key):
-                old_gradients[key] = old_gradients[key] + scale * val
-            else:       
-                old_gradients[key] = scale * val
-    return old_gradients
-
-#-----------------------------------------------------------------------------
 
 class ShapeDependentInitialization(NdarrayInitialization):
     """Initialize 
@@ -75,30 +50,3 @@ class RWSInitialization(ShapeDependentInitialization):
 
     def scale_func(self, dim_in, dim_out):
         return self.factor * numpy.sqrt(6)/numpy.sqrt(dim_in+dim_out)/dim_in
-
-#-----------------------------------------------------------------------------
-
-class GradientMonitor(object):
-    def __init__(self, gradients, prefix=""):
-        self.gradients = gradients
-        self.prefix = prefix
-        pass
-
-    def vars(self):
-        prefix = self.prefix 
-        monitor_vars = []
-
-        aggregators = {
-            'min':   tensor.min,
-            'max':   tensor.max,
-            'mean':  tensor.mean,
-        }
-
-        for key, value in six.iteritems(self.gradients):
-            min = tensor.min(value)
-            ipdb.set_trace()
-            monitor_vars.append(monitor_vars)
-
-        return monitor_vars
-
-
