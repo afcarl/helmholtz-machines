@@ -390,12 +390,12 @@ class GaussianLayer(Initializable, ProbabilisticLayer):
 
         params = Selector(self.mlp).get_params()
         for pname, param in params.iteritems():
-            gradients[param] = tensor.grad(cost_gscale.mean(), param, consider_constant=[X, Y])
+            gradients[param] = tensor.grad(cost_gscale.sum(), param, consider_constant=[X, Y])
 
-        gradients[W_mean] = tensor.grad(cost_scaled.mean(), W_mean, consider_constant=[X, Y])
-        gradients[b_mean] = tensor.grad(cost_scaled.mean(), b_mean, consider_constant=[X, Y])
+        gradients[W_mean] = tensor.grad(cost_scaled.sum(), W_mean, consider_constant=[X, Y])
+        gradients[b_mean] = tensor.grad(cost_scaled.sum(), b_mean, consider_constant=[X, Y])
 
-        gradients[W_ls] = tensor.grad(cost_scaled.mean(), W_ls, consider_constant=[X, Y])
-        gradients[b_ls] = tensor.grad(cost_scaled.mean(), b_ls, consider_constant=[X, Y])
+        gradients[W_ls] = tensor.grad(cost_scaled.sum(), W_ls, consider_constant=[X, Y])
+        gradients[b_ls] = tensor.grad(cost_scaled.sum(), b_ls, consider_constant=[X, Y])
             
         return gradients
