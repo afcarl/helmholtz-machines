@@ -3,7 +3,9 @@ from __future__ import division
 
 
 local_datasets = ["adult", "dna", "web", "nips", "mushrooms", "ocr_letters", "connect4", "rcv1"]
-supported_datasets = local_datasets + ['bmnist', 'tfd', 'bars', 'silhouettes']
+supported_datasets = local_datasets + ['bmnist', 'bars', 'silhouettes']
+
+# 'tfd' is missing but needs normalization 
 
 def get_data(data_name):
     if data_name == 'bmnist':
@@ -26,11 +28,12 @@ def get_data(data_name):
     elif data_name == 'tfd':
         from fuel.datasets.toronto_face_database import TorontoFaceDatabase
 
-        x_dim = 48*48
+        size = 48
+        x_dim = size*size
 
-        data_train = TorontoFaceDatabase(which_sets=['unlabeled'], sources=['features'])
-        data_valid = TorontoFaceDatabase(which_sets=['valid'], sources=['features'])
-        data_test  = TorontoFaceDatabase(which_sets=['test'], sources=['features'])
+        data_train = TorontoFaceDatabase(which_sets=['unlabeled'], size=size, sources=['features'])
+        data_valid = TorontoFaceDatabase(which_sets=['valid'], size=size, sources=['features'])
+        data_test  = TorontoFaceDatabase(which_sets=['test'], size=size, sources=['features'])
     elif data_name == 'bars':
         from bars_data import Bars
 
