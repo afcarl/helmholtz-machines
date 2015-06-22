@@ -33,6 +33,7 @@ from fuel.transformers import Flatten
 from blocks.algorithms import GradientDescent, CompositeRule, Scale, Momentum, BasicMomentum, RMSProp, StepClipping, Adam, RemoveNotFinite
 from blocks.bricks import Tanh, Logistic
 from blocks.extensions import FinishAfter, Timing, Printing, ProgressBar
+from blocks.extensions.stopping import FinishIfNoImprovementAfter
 from blocks.extensions.plot import Plot
 from blocks.extensions.saveload import Checkpoint
 from blocks.extensions.training import SharedVariableModifier, TrackTheBest
@@ -78,7 +79,7 @@ def main(data, batch_size, learning_rate, epochs, n_samples, layer_spec, determi
     lr_tag = float_tag(learning_rate)
     sizes_tag = layer_spec.replace(",", "-")
 
-    name = "%s-%s-lr%s-e%d-hl%d-spl%d-%s" % (data, name, lr_tag, epochs, deterministic_layers, n_samples, sizes_tag)
+    name = "%s-%s-lr%s-hl%d-spl%d-%s" % (data, name, lr_tag, deterministic_layers, n_samples, sizes_tag)
 
     half_lr = 100 
 
@@ -230,7 +231,6 @@ def main(data, batch_size, learning_rate, epochs, n_samples, layer_spec, determi
         algorithm=algorithm,
         extensions=[Timing(),
                     ProgressBar(),
-                    FinishAfter(after_n_epochs=epochs),
                     TrainingDataMonitoring(
                         train_monitors,
                         prefix="train",
@@ -263,7 +263,9 @@ def main(data, batch_size, learning_rate, epochs, n_samples, layer_spec, determi
                             ["valid_log_ph", "valid_log_p"], 
                             ["train_total_gradient_norm", "train_total_step_norm"]
                         ]),
-                   Printing()])
+                    FinishIfNoImprovementAfter('valid_log_p_best_so_far', epochs=10),
+                    FinishAfter(after_n_epochs=epochs),
+                    Printing()])
     main_loop.run()
 
 #=============================================================================
@@ -274,7 +276,7 @@ if __name__ == "__main__":
     parser.add_argument("--data", "-d", dest='data', choices=datasets.supported_datasets,
                 default='bmnist', help="Dataset to use")
     parser.add_argument("--epochs", type=int, dest="epochs",
-                default=50, help="Number of training epochs to do")
+                default=1000, help="Number of training epochs to do")
     parser.add_argument("--bs", "--batch-size", type=int, dest="batch_size",
                 default=100, help="Size of each mini-batch")
     parser.add_argument("--nsamples", "-s", type=int, dest="n_samples",
