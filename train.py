@@ -33,6 +33,7 @@ from fuel.transformers import Flatten
 from blocks.algorithms import GradientDescent, CompositeRule, Scale, Momentum, BasicMomentum, RMSProp, StepClipping, Adam, RemoveNotFinite
 from blocks.bricks import Tanh, Logistic
 from blocks.extensions import FinishAfter, Timing, Printing, ProgressBar
+from blocks.extensions.stopping import FinishIfNoImprovementAfter
 from blocks.extensions.plot import Plot
 from blocks.extensions.saveload import Checkpoint
 from blocks.extensions.training import SharedVariableModifier, TrackTheBest
@@ -230,7 +231,6 @@ def main(data, batch_size, learning_rate, epochs, n_samples, layer_spec, determi
         algorithm=algorithm,
         extensions=[Timing(),
                     ProgressBar(),
-                    FinishAfter(after_n_epochs=epochs),
                     TrainingDataMonitoring(
                         train_monitors,
                         prefix="train",
@@ -263,7 +263,9 @@ def main(data, batch_size, learning_rate, epochs, n_samples, layer_spec, determi
                             ["valid_log_ph", "valid_log_p"], 
                             ["train_total_gradient_norm", "train_total_step_norm"]
                         ]),
-                   Printing()])
+                    FinishIfNoImprovementAfter('valid_log_p_best_so_far', epochs=10),
+                    FinishAfter(after_n_epochs=1000),
+                    Printing()])
     main_loop.run()
 
 #=============================================================================
