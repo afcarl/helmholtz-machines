@@ -73,7 +73,7 @@ def float_tag(value):
 
 
 #-----------------------------------------------------------------------------
-def main(data, batch_size, learning_rate, epochs, n_samples, layer_spec, deterministic_layers, name):
+def main(live_plotting, data, batch_size, learning_rate, epochs, n_samples, layer_spec, deterministic_layers, name):
     """ Run experiment
     """
     lr_tag = float_tag(learning_rate)
@@ -224,6 +224,18 @@ def main(data, batch_size, learning_rate, epochs, n_samples, layer_spec, determi
         ),
         which_sources='features')
 
+    plotting_extensions = []
+    if live_plotting:
+        plotting_extensions = [
+            Plot(
+                name,
+                channels=[
+                    #["train_log_ph", "train_log_p", "valid_log_ph", "valid_log_p", "test_log_ph_100", "test_log_p_100"], 
+                    ["valid_log_ph", "valid_log_p"], 
+                    ["train_total_gradient_norm", "train_total_step_norm"]
+            ]),
+        ]
+ 
 
     main_loop = MainLoop(
         model=Model(log_ph),
@@ -256,16 +268,9 @@ def main(data, batch_size, learning_rate, epochs, n_samples, layer_spec, determi
                     TrackTheBest('valid_log_p'),
                     TrackTheBest('valid_log_ph'),
                     Checkpoint(name+".pkl", save_separately=['log', 'model']),
-                    Plot(
-                        name,
-                        channels=[
-                            #["train_log_ph", "train_log_p", "valid_log_ph", "valid_log_p", "test_log_ph_100", "test_log_p_100"], 
-                            ["valid_log_ph", "valid_log_p"], 
-                            ["train_total_gradient_norm", "train_total_step_norm"]
-                        ]),
                     FinishIfNoImprovementAfter('valid_log_p_best_so_far', epochs=10),
                     FinishAfter(after_n_epochs=epochs),
-                    Printing()])
+                    Printing()] + plotting_extensions)
     main_loop.run()
 
 #=============================================================================
@@ -275,6 +280,8 @@ if __name__ == "__main__":
     parser = ArgumentParser()
     parser.add_argument("--data", "-d", dest='data', choices=datasets.supported_datasets,
                 default='bmnist', help="Dataset to use")
+    parser.add_argument("--live-plotting", "--plot", action="store_true", default=False,
+                help="Enable live plotting to a Bokkeh server")
     parser.add_argument("--epochs", type=int, dest="epochs",
                 default=1000, help="Number of training epochs to do")
     parser.add_argument("--bs", "--batch-size", type=int, dest="batch_size",
