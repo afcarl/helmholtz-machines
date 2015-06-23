@@ -17,8 +17,8 @@ import fuel
 import theano
 import numpy as np
 
-import blocks
 import blocks.extras
+import blocks
 
 from argparse import ArgumentParser
 from collections import OrderedDict
@@ -34,7 +34,6 @@ from blocks.algorithms import GradientDescent, CompositeRule, Scale, Momentum, B
 from blocks.bricks import Tanh, Logistic
 from blocks.extensions import FinishAfter, Timing, Printing, ProgressBar
 from blocks.extensions.stopping import FinishIfNoImprovementAfter
-from blocks.extensions.plot import Plot
 from blocks.extensions.saveload import Checkpoint
 from blocks.extensions.training import SharedVariableModifier, TrackTheBest
 from blocks.extensions.monitoring import DataStreamMonitoring, TrainingDataMonitoring
@@ -45,6 +44,9 @@ from blocks.monitoring import aggregation
 from blocks.main_loop import MainLoop
 from blocks.roles import add_role, WEIGHT, BIAS, PARAMETER
 from blocks.utils import shared_floatx
+
+from blocks_extras.extensions.plot import PlotManager, Plotter, DisplayImage
+from blocks_extras.extensions.display import ImageDataStreamDisplay, WeightDisplay, ImageSamplesDisplay
 
 import helmholtz.datasets as datasets
 
@@ -227,15 +229,23 @@ def main(live_plotting, data, batch_size, learning_rate, epochs, n_samples, laye
     plotting_extensions = []
     if live_plotting:
         plotting_extensions = [
-            Plot(
+            PlotManager(
                 name,
-                channels=[
-                    #["train_log_ph", "train_log_p", "valid_log_ph", "valid_log_p", "test_log_ph_100", "test_log_p_100"], 
-                    ["valid_log_ph", "valid_log_p"], 
-                    ["train_total_gradient_norm", "train_total_step_norm"]
-            ]),
+                [Plotter(channels=[
+                        ["valid_log_ph", "valid_log_p"], 
+                        ["train_total_gradient_norm", "train_total_step_norm"]],
+                    titles=[
+                        "validation cost",
+                        "norm of training gradient and step"
+                    ]), 
+                DisplayImage([
+                    WeightDisplay(
+                        model.p_layers[0].mlp.linear_transformations[0].W, 
+                        n_weights=100, image_shape=(28, 28))]
+                    #ImageDataStreamDisplay(test_stream, image_shape=(28,28))]
+                )]
+            )
         ]
- 
 
     main_loop = MainLoop(
         model=Model(log_ph),
