@@ -13,7 +13,5 @@ Implementations of various Helmholz Machines
 Dependencies
 ------------
 
- * Blocks
- * Fuel
-
-... and it's dependencies, most notable Theano and the NumPy/SciPy stack.
+ * blocks, blocks-extras, fuel
+ * theano, numpy, scipy
