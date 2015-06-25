@@ -6,7 +6,7 @@ Implementations of various Helmholz Machines
 --------------------------------------------
 
  * Wake-sleep algorithm
- * Rweighted Wake-sleep
+ * Reweighted Wake-sleep
  * Variational Autoencoder
  * NVIL  (Neural Variational Inference and Learning)
 
