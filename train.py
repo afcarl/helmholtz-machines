@@ -75,32 +75,42 @@ def float_tag(value):
 
 
 #-----------------------------------------------------------------------------
-def main(live_plotting, data, batch_size, learning_rate, epochs, n_samples, layer_spec, deterministic_layers, name):
-    """ Run experiment
-    """
-    lr_tag = float_tag(learning_rate)
-    sizes_tag = layer_spec.replace(",", "-")
+def main(args):
+    """Run experiment. """
+    lr_tag = float_tag(args.learning_rate)
+    sizes_tag = args.layer_spec.replace(",", "-")
 
-    name = "%s-%s-lr%s-hl%d-spl%d-%s" % (data, name, lr_tag, deterministic_layers, n_samples, sizes_tag)
+    name = "%s-%s-%s-lr%s-dl%d-spl%d-%s" % \
+            (args.method, args.data, args.name, lr_tag, args.deterministic_layers, args.n_samples, sizes_tag)
 
-    half_lr = 100 
+    #half_lr = 100 
 
     #------------------------------------------------------------
     
-    x_dim, data_train, data_valid, data_test = datasets.get_data(data)
+    x_dim, data_train, data_valid, data_test = datasets.get_data(args.data)
 
     #------------------------------------------------------------
     # Setup model 
-
     deterministic_act = Tanh
     deterministic_size = 1.
 
-    p_layers, q_layers = create_layers(layer_spec, x_dim, deterministic_layers, deterministic_act, deterministic_size)
+    p_layers, q_layers = create_layers(args.layer_spec, x_dim, args.deterministic_layers, deterministic_act, deterministic_size)
 
-    model = ReweightedWakeSleep(
-            p_layers, 
-            q_layers, 
-        )
+
+    if args.method == 'rws':
+        model = ReweightedWakeSleep(
+                p_layers, 
+                q_layers, 
+            )
+    elif args.method == 'bihw-rws':
+        raise NotImplemented("BiHM not implemented yet")
+        model = GMM(
+                p_layers, 
+                q_layers, 
+            )
+    else:
+        raise ValueError("Unknown training method '%s'" % args.method)
+        
     model.initialize()
 
     #------------------------------------------------------------
@@ -111,7 +121,7 @@ def main(live_plotting, data, batch_size, learning_rate, epochs, n_samples, laye
     # Testset monitoring
 
     test_monitors = []
-    for s in [1, 10, 50, 100]:
+    for s in [1, 10, 100, 1000]:
         log_p, log_ph = model.log_likelihood(x, s)
         log_p  = -log_p.mean()
         log_ph = -log_ph.mean()
@@ -125,7 +135,7 @@ def main(live_plotting, data, batch_size, learning_rate, epochs, n_samples, laye
     #------------------------------------------------------------
     # Gradient and training monitoring
 
-    log_p, log_ph, gradients = model.get_gradients(x, n_samples)
+    log_p, log_ph, gradients = model.get_gradients(x, args.n_samples)
     log_p  = -log_p.mean()
     log_ph = -log_ph.mean()
     log_p.name  = "log_p"
@@ -138,7 +148,7 @@ def main(live_plotting, data, batch_size, learning_rate, epochs, n_samples, laye
     # Detailed monitoring
     """
     n_layers = len(p_layers)
-    
+
     log_px, w, log_p, log_q, samples = model.log_likelihood(x, n_samples)
 
     exp_samples = []
@@ -147,7 +157,7 @@ def main(live_plotting, data, batch_size, learning_rate, epochs, n_samples, laye
         e.name = "inference_h%d" % l
         e.tag.aggregation_scheme = aggregation.TakeLast(e)
         exp_samples.append(e)
-    
+
     s1 = samples[1]
     sh1 = s1.shape
     s1_ = s1.reshape([sh1[0]*sh1[1], sh1[2]])
@@ -158,7 +168,6 @@ def main(live_plotting, data, batch_size, learning_rate, epochs, n_samples, laye
     s0.tag.aggregation_scheme = aggregation.TakeLast(s0)
     exp_samples.append(s0)
 
-
     # Draw P-samples
     p_samples, _, _ = model.sample_p(100)
     #weights = model.importance_weights(samples)
@@ -167,7 +176,7 @@ def main(live_plotting, data, batch_size, learning_rate, epochs, n_samples, laye
     for i, s in enumerate(p_samples):
         s.name = "psamples_h%d" % i
         s.tag.aggregation_scheme = aggregation.TakeLast(s)
-    
+
     #
     samples = model.sample(100, oversample=100)
 
@@ -183,11 +192,10 @@ def main(live_plotting, data, batch_size, learning_rate, epochs, n_samples, laye
         cost=log_ph,
         gradients=gradients,
         step_rule=CompositeRule([
-            RMSProp(learning_rate),
+            RMSProp(args.learning_rate),
             #Adam(learning_rate),
             RemoveNotFinite(0.9),
         ])
-
 #        step_rule=Adam(learning_rate),
 #        step_rule=Momentum(learning_rate, 0.95),
 #        step_rule=CompositeRule([
@@ -203,31 +211,30 @@ def main(live_plotting, data, batch_size, learning_rate, epochs, n_samples, laye
 
     train_monitors += [aggregation.mean(algorithm.total_gradient_norm),
                        aggregation.mean(algorithm.total_step_norm)]
-
  
     #------------------------------------------------------------
 
     train_stream = Flatten(
         DataStream(
             data_train,
-            iteration_scheme=ShuffledScheme(data_train.num_examples, batch_size)
+            iteration_scheme=ShuffledScheme(data_train.num_examples, args.batch_size)
         ), 
         which_sources='features')
     valid_stream = Flatten(
         DataStream(
             data_valid,
-            iteration_scheme=SequentialScheme(data_valid.num_examples, batch_size)
+            iteration_scheme=SequentialScheme(data_valid.num_examples, args.batch_size)
         ),
         which_sources='features')
     test_stream = Flatten(
         DataStream(
             data_test,
-            iteration_scheme=SequentialScheme(data_test.num_examples, batch_size)
+            iteration_scheme=SequentialScheme(data_test.num_examples, args.batch_size)
         ),
         which_sources='features')
 
     plotting_extensions = []
-    if live_plotting:
+    if args.live_plotting:
         plotting_extensions = [
             PlotManager(
                 name,
@@ -279,7 +286,7 @@ def main(live_plotting, data, batch_size, learning_rate, epochs, n_samples, laye
                     TrackTheBest('valid_log_ph'),
                     Checkpoint(name+".pkl", save_separately=['log', 'model']),
                     FinishIfNoImprovementAfter('valid_log_p_best_so_far', epochs=10),
-                    FinishAfter(after_n_epochs=epochs),
+                    FinishAfter(after_n_epochs=args.max_epochs),
                     Printing()] + plotting_extensions)
     main_loop.run()
 
@@ -292,20 +299,36 @@ if __name__ == "__main__":
                 default='bmnist', help="Dataset to use")
     parser.add_argument("--live-plotting", "--plot", action="store_true", default=False,
                 help="Enable live plotting to a Bokkeh server")
-    parser.add_argument("--epochs", type=int, dest="epochs",
-                default=1000, help="Number of training epochs to do")
+    parser.add_argument("--max-epochs", "--epochs", type=int, dest="max_epochs",
+                default=1000, help="Maximum # of training epochs to run")
     parser.add_argument("--bs", "--batch-size", type=int, dest="batch_size",
                 default=100, help="Size of each mini-batch")
-    parser.add_argument("--nsamples", "-s", type=int, dest="n_samples",
-                default=10, help="Number of IS samples")
     parser.add_argument("--lr", "--learning-rate", type=float, dest="learning_rate",
                 default=1e-3, help="Learning rate")
-    parser.add_argument("--deterministic-layers", type=int, dest="deterministic_layers",
-                default=0, help="hidden layers per stochastic layer")
     parser.add_argument("--name", type=str, dest="name",
                 default="", help="Name for this experiment")
-    parser.add_argument("layer_spec", type=str, 
+    subparsers = parser.add_subparsers(title="methods", dest="method")
+
+    # Reweighted Wake-Sleep
+    subparser = subparsers.add_parser("rws",
+                help="Reweighted Wake-Sleep")
+    subparser.add_argument("--nsamples", "-s", type=int, dest="n_samples",
+                default=10, help="Number of IS samples")
+    subparser.add_argument("--deterministic-layers", type=int, dest="deterministic_layers",
+                default=0, help="Deterministic hidden layers per stochastic layer")
+    subparser.add_argument("layer_spec", type=str, 
                 default="200,200,200", help="Comma seperated list of layer sizes")
+
+    # Bidirection HM 
+    subparser = subparsers.add_parser("bihm-rws",
+                help="Bidirectional Helmholtz Machine with RWS")
+    subparser.add_argument("--nsamples", "-s", type=int, dest="n_samples",
+                default=10, help="Number of IS samples")
+    subparser.add_argument("--deterministic-layers", type=int, dest="deterministic_layers",
+                default=0, help="Deterministic hidden layers per stochastic layer")
+    subparser.add_argument("layer_spec", type=str, 
+                default="200,200,200", help="Comma seperated list of layer sizes")
+
     args = parser.parse_args()
 
-    main(**vars(args))
+    main(args)
