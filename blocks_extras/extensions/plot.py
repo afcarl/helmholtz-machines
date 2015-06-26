@@ -1,3 +1,10 @@
+"""
+
+This code was originally by Laurent Dinh (https://github.com/laurent-dinh)
+
+"""
+
+
 import logging
 import signal
 import time
