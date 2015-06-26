@@ -300,7 +300,7 @@ if __name__ == "__main__":
     parser.add_argument("--live-plotting", "--plot", action="store_true", default=False,
                 help="Enable live plotting to a Bokkeh server")
     parser.add_argument("--max-epochs", "--epochs", type=int, dest="max_epochs",
-                default=1000, help="Maximum # of training epochs to run")
+                default=10000, help="Maximum # of training epochs to run")
     parser.add_argument("--bs", "--batch-size", type=int, dest="batch_size",
                 default=100, help="Size of each mini-batch")
     parser.add_argument("--lr", "--learning-rate", type=float, dest="learning_rate",

@@ -119,8 +119,8 @@ class ReweightedWakeSleep(HelmholtzMachine):
             
         return samples, log_p, log_q
 
-    #@application(inputs=['n_samples'], 
-    #             outputs=['samples', 'log_q', 'log_p'])
+    @application(inputs=['n_samples'], 
+                 outputs=['samples', 'log_p', 'log_q'])
     def sample(self, n_samples):
         return self.sample_p(n_amples)
 
@@ -166,9 +166,8 @@ class ReweightedWakeSleep(HelmholtzMachine):
 
         # Approximate log(p(x))
         log_px  = logsumexp(log_p_all-log_q_all, axis=-1) - tensor.log(n_samples)
-        log_psx = (logsumexp((log_p_all-log_q_all)/2, axis=-1) - tensor.log(n_samples)) * 2.
 
-        return log_px, log_psx
+        return log_px, log_px
 
     @application(inputs=['features', 'n_samples'], outputs=['log_px', 'log_psx', 'gradients'])
     def get_gradients(self, features, n_samples):
@@ -204,7 +203,6 @@ class ReweightedWakeSleep(HelmholtzMachine):
 
         # Approximate log(p(x))
         log_px  = logsumexp(log_p_all-log_q_all, axis=-1) - tensor.log(n_samples)
-        log_psx = (logsumexp((log_p_all-log_q_all)/2, axis=-1) - tensor.log(n_samples)) * 2.
 
         w = w.reshape( (batch_size*n_samples, ) )
         samples = flatten_values(samples, batch_size*n_samples)
@@ -212,10 +210,15 @@ class ReweightedWakeSleep(HelmholtzMachine):
         gradients = OrderedDict()
         for l in xrange(n_layers-1):
             gradients = merge_gradients(gradients, p_layers[l].get_gradients(samples[l], samples[l+1], weights=w))
-            gradients = merge_gradients(gradients, q_layers[l].get_gradients(samples[l+1], samples[l], weights=w))
+            gradients = merge_gradients(gradients, q_layers[l].get_gradients(samples[l+1], samples[l], weights=w), 0.5)
         gradients = merge_gradients(gradients, p_layers[-1].get_gradients(samples[-1], weights=w))
 
-        return log_px, log_psx, gradients
+        # Now sleep phase..
+        samples, log_p, log_q = self.sample_p(batch_size)
+        for l in xrange(n_layers-1):
+            gradients = merge_gradients(gradients, q_layers[l].get_gradients(samples[l+1], samples[l]), 0.5)
+
+        return log_px, log_px, gradients
 
         """
         if self.zreg > 0.0:
