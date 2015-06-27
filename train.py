@@ -102,8 +102,7 @@ def main(args):
                 p_layers, 
                 q_layers, 
             )
-    elif args.method == 'bihw-rws':
-        raise NotImplemented("BiHM not implemented yet")
+    elif args.method == 'bihm-rws':
         model = GMM(
                 p_layers, 
                 q_layers, 
