@@ -5,6 +5,7 @@ import argparse
 import train
 
 
+@unittest.skip("takes too long")
 def test_main():
     args = argparse.Namespace
     args.data = "bmnist"
