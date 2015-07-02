@@ -191,8 +191,8 @@ def main(args):
         cost=log_ph,
         gradients=gradients,
         step_rule=CompositeRule([
-            RMSProp(args.learning_rate),
-            #Adam(learning_rate),
+#            RMSProp(args.learning_rate),
+            Momentum(args.learning_rate, 0.95),
             RemoveNotFinite(0.9),
         ])
 #        step_rule=Adam(learning_rate),
