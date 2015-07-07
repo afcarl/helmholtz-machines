@@ -75,7 +75,7 @@ class ProbabilisticTopLayer(Random):
     def get_gradients(self, X, weights=1.):
         cost = -(weights * self.log_prob(X)).sum()
  
-        params = Selector(self).get_params()
+        params = Selector(self).get_parameters()
         
         gradients = OrderedDict()
         if isinstance(weights, float):
@@ -104,7 +104,7 @@ class ProbabilisticLayer(Random):
     def get_gradients(self, X, Y, weights=1.):
         cost = -(weights * self.log_prob(X, Y)).sum()
         
-        params = Selector(self).get_params()
+        params = Selector(self).get_parameters()
 
         gradients = OrderedDict()
         if isinstance(weights, float):
@@ -128,16 +128,16 @@ class BernoulliTopLayer(Initializable, ProbabilisticTopLayer):
     def _allocate(self):
         b = shared_floatx_zeros((self.dim_X,), name='b')
         add_role(b, BIAS)
-        self.params.append(b)
+        self.parameters.append(b)
         self.add_auxiliary_variable(b.norm(2), name='b_norm')
         
     def _initialize(self):
-        b, = self.params
+        b, = self.parameters
         self.biases_init.initialize(b, self.rng)
 
     @application(inputs=[], outputs=['X_expected'])
     def sample_expected(self):
-        b = self.params[0]
+        b = self.parameters[0]
         return tensor.nnet.sigmoid(b)
 
     @application(outputs=['X', 'log_prob'])
@@ -193,15 +193,15 @@ class GaussianTopLayer(Initializable, ProbabilisticTopLayer):
     def _allocate(self):
         b = shared_floatx_zeros((self.dim_X,), name='b')
         add_role(b, BIAS)
-        self.params = [b]
+        self.parameters = [b]
         
     def _initialize(self):
-        b, = self.params
+        b, = self.parameters
         self.biases_init.initialize(b, self.rng)
 
     @application(inputs=[], outputs=['mean', 'log_sigma'])
     def sample_expected(self, n_samples):
-        b, = self.params
+        b, = self.parameters
         mean      = tensor.zeros((n_samples, self.dim_X))
         #log_sigma = tensor.zeros((n_samples, self.dim_X)) + b
         log_sigma = tensor.log(self.fixed_sigma)
@@ -257,19 +257,19 @@ class GaussianLayerFixedSigma(Initializable, ProbabilisticLayer):
         self.b_mean = shared_floatx_zeros((dim_X,), name='b_mean')
         add_role(self.b_mean, BIAS)
 
-        self.params = [self.W_mean, self.b_mean]
+        self.parameters = [self.W_mean, self.b_mean]
         
     def _initialize(self):
         super(GaussianLayerFixedSigma, self)._initialize()
 
-        W_mean, b_mean = self.params
+        W_mean, b_mean = self.parameters
 
         self.weights_init.initialize(W_mean, self.rng)
         self.biases_init.initialize(b_mean, self.rng)
 
     @application(inputs=['Y'], outputs=['mean', 'log_sigma'])
     def sample_expected(self, Y):
-        W_mean, b_mean = self.params
+        W_mean, b_mean = self.parameters
 
         a = self.mlp.apply(Y)
         mean      = tensor.dot(a, W_mean) + b_mean
@@ -328,12 +328,12 @@ class GaussianLayer(Initializable, ProbabilisticLayer):
         add_role(self.b_mean, BIAS)
         add_role(self.b_ls, BIAS)
 
-        self.params = [self.W_mean, self.W_ls, self.b_mean, self.b_ls]
+        self.parameters = [self.W_mean, self.W_ls, self.b_mean, self.b_ls]
         
     def _initialize(self):
         super(GaussianLayer, self)._initialize()
 
-        W_mean, W_ls, b_mean, b_ls = self.params
+        W_mean, W_ls, b_mean, b_ls = self.parameters
 
         self.weights_init.initialize(W_mean, self.rng)
         self.weights_init.initialize(W_ls, self.rng)
@@ -342,7 +342,7 @@ class GaussianLayer(Initializable, ProbabilisticLayer):
 
     @application(inputs=['Y'], outputs=['mean', 'log_sigma'])
     def sample_expected(self, Y):
-        W_mean, W_ls, b_mean, b_ls = self.params
+        W_mean, W_ls, b_mean, b_ls = self.parameters
 
         a = self.mlp.apply(Y)
         mean = tensor.dot(a, W_mean) + b_mean
@@ -373,7 +373,7 @@ class GaussianLayer(Initializable, ProbabilisticLayer):
         return log_prob.sum(axis=1)
 
     def get_gradients(self, X, Y, weights=1.):
-        W_mean, W_ls, b_mean, b_ls = self.params
+        W_mean, W_ls, b_mean, b_ls = self.parameters
 
         mean, log_sigma = self.sample_expected(Y)
         sigma = tensor.exp(log_sigma)
@@ -388,7 +388,7 @@ class GaussianLayer(Initializable, ProbabilisticLayer):
         
         gradients = OrderedDict()
 
-        params = Selector(self.mlp).get_params()
+        params = Selector(self.mlp).get_parameters()
         for pname, param in params.iteritems():
             gradients[param] = tensor.grad(cost_gscale.sum(), param, consider_constant=[X, Y])
 
