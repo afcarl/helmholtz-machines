@@ -46,7 +46,7 @@ def get_data(data_name):
     elif data_name in local_datasets:
         from fuel.datasets.hdf5 import H5PYDataset
 
-        fname = "../data/"+data_name+".hdf5"
+        fname = "data/"+data_name+".hdf5"
         
         data_train = H5PYDataset(fname, which_sets=["train"], sources=['features'], load_in_memory=True)
         data_valid = H5PYDataset(fname, which_sets=["valid"], sources=['features'], load_in_memory=True)
