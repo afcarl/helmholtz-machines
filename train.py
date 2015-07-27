@@ -83,14 +83,14 @@ def main(args):
     name = "%s-%s-%s-lr%s-dl%d-spl%d-%s" % \
             (args.method, args.data, args.name, lr_tag, args.deterministic_layers, args.n_samples, sizes_tag)
 
-    #half_lr = 100 
+    #half_lr = 100
 
     #------------------------------------------------------------
-    
+
     x_dim, data_train, data_valid, data_test = datasets.get_data(args.data)
 
     #------------------------------------------------------------
-    # Setup model 
+    # Setup model
     deterministic_act = Tanh
     deterministic_size = 1.
 
@@ -99,17 +99,17 @@ def main(args):
 
     if args.method == 'rws':
         model = ReweightedWakeSleep(
-                p_layers, 
-                q_layers, 
+                p_layers,
+                q_layers,
             )
     elif args.method == 'bihm-rws':
         model = GMM(
-                p_layers, 
-                q_layers, 
+                p_layers,
+                q_layers,
             )
     else:
         raise ValueError("Unknown training method '%s'" % args.method)
-        
+
     model.initialize()
 
     #------------------------------------------------------------
@@ -142,7 +142,7 @@ def main(args):
 
     train_monitors = [log_p, log_ph]
     valid_monitors = [log_p, log_ph]
-   
+
     #------------------------------------------------------------
     # Detailed monitoring
     """
@@ -238,15 +238,15 @@ def main(args):
             PlotManager(
                 name,
                 [Plotter(channels=[
-                        ["valid_log_ph", "valid_log_p"], 
+                        ["valid_log_ph", "valid_log_p"],
                         ["train_total_gradient_norm", "train_total_step_norm"]],
                     titles=[
                         "validation cost",
                         "norm of training gradient and step"
-                    ]), 
+                    ]),
                 DisplayImage([
                     WeightDisplay(
-                        model.p_layers[0].mlp.linear_transformations[0].W, 
+                        model.p_layers[0].mlp.linear_transformations[0].W,
                         n_weights=100, image_shape=(28, 28))]
                     #ImageDataStreamDisplay(test_stream, image_shape=(28,28))]
                 )]
@@ -264,11 +264,11 @@ def main(args):
                         prefix="train",
                         after_batch=True),
                     DataStreamMonitoring(
-                        valid_monitors, 
+                        valid_monitors,
                         data_stream=valid_stream,
                         prefix="valid"),
                     DataStreamMonitoring(
-                        test_monitors, 
+                        test_monitors,
                         data_stream=test_stream,
                         prefix="test",
                         after_epoch=False,
@@ -315,17 +315,17 @@ if __name__ == "__main__":
                 default=10, help="Number of IS samples")
     subparser.add_argument("--deterministic-layers", type=int, dest="deterministic_layers",
                 default=0, help="Deterministic hidden layers per stochastic layer")
-    subparser.add_argument("layer_spec", type=str, 
+    subparser.add_argument("layer_spec", type=str,
                 default="200,200,200", help="Comma seperated list of layer sizes")
 
-    # Bidirection HM 
+    # Bidirection HM
     subparser = subparsers.add_parser("bihm-rws",
                 help="Bidirectional Helmholtz Machine with RWS")
     subparser.add_argument("--nsamples", "-s", type=int, dest="n_samples",
                 default=10, help="Number of IS samples")
     subparser.add_argument("--deterministic-layers", type=int, dest="deterministic_layers",
                 default=0, help="Deterministic hidden layers per stochastic layer")
-    subparser.add_argument("layer_spec", type=str, 
+    subparser.add_argument("layer_spec", type=str,
                 default="200,200,200", help="Comma seperated list of layer sizes")
 
     args = parser.parse_args()
