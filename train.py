@@ -210,10 +210,22 @@ def main(args):
 
     train_monitors += [aggregation.mean(algorithm.total_gradient_norm),
                        aggregation.mean(algorithm.total_step_norm)]
- 
+
     #------------------------------------------------------------
 
-    train_stream = Flatten(
+    # Out usual train/valid/test data streams...
+    train_stream, valid_stream, test_stream = (
+            Flatten(DataStream(
+                data,
+                iteration_scheme=ShuffledScheme(data.num_examples, batch_size)
+            ), which_sources='features')
+        for data, batch_size in ((data_train, args.batch_size),
+                                 (data_valid, args.batch_size//2),
+                                 (data_test, args.batch_size//2))
+    )
+
+    # A single datapooint per for detailed gradient monitoring...
+    gradient_stream = Flatten(
         DataStream(
             data_train,
             iteration_scheme=ShuffledScheme(data_train.num_examples, args.batch_size)
