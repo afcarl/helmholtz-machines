@@ -129,7 +129,9 @@ def main(args):
 
         test_monitors.append(log_p)
         test_monitors.append(log_ph)
- 
+        test_monitors.append(aggregation.std(log_p))
+        test_monitors.append(aggregation.std(log_ph))
+
 
     #------------------------------------------------------------
     # Gradient and training monitoring
@@ -140,8 +142,11 @@ def main(args):
     log_p.name  = "log_p"
     log_ph.name = "log_ph"
 
-    train_monitors = [log_p, log_ph]
-    valid_monitors = [log_p, log_ph]
+    log_p_std = aggregation.std(log_p)
+    log_p_nupdates = aggregation.nupdates(log_p)
+
+    train_monitors = [log_p, log_ph, log_p_std, log_p_nupdates]
+    valid_monitors = [log_p, log_ph, log_p_std, log_p_nupdates]
 
     #------------------------------------------------------------
     # Detailed monitoring
@@ -201,7 +206,10 @@ def main(args):
     #------------------------------------------------------------
 
     train_monitors += [aggregation.mean(algorithm.total_gradient_norm),
-                       aggregation.mean(algorithm.total_step_norm)]
+                       aggregation.mean(algorithm.total_step_norm),
+                       aggregation.nupdates(algorithm.total_gradient_norm),]
+                       #aggregation.std(gradients.values()[1])]
+    #train_monitors += [aggregation.variance(gradients.values()[0])]
 
     #------------------------------------------------------------
 
