@@ -137,16 +137,16 @@ def main(args):
     # Gradient and training monitoring
 
     log_p, log_ph, gradients = model.get_gradients(x, args.n_samples)
+
     log_p  = -log_p.mean()
     log_ph = -log_ph.mean()
     log_p.name  = "log_p"
     log_ph.name = "log_ph"
 
     log_p_std = aggregation.std(log_p)
-    log_p_nupdates = aggregation.nupdates(log_p)
 
-    train_monitors = [log_p, log_ph, log_p_std, log_p_nupdates]
-    valid_monitors = [log_p, log_ph, log_p_std, log_p_nupdates]
+    train_monitors = [log_p, log_ph, log_p_std]
+    valid_monitors = [log_p, log_ph, log_p_std]
 
     #------------------------------------------------------------
     # Detailed monitoring
@@ -206,10 +206,15 @@ def main(args):
     #------------------------------------------------------------
 
     train_monitors += [aggregation.mean(algorithm.total_gradient_norm),
-                       aggregation.mean(algorithm.total_step_norm),
-                       aggregation.nupdates(algorithm.total_gradient_norm),]
+                       aggregation.mean(algorithm.total_step_norm)]
                        #aggregation.std(gradients.values()[1])]
-    #train_monitors += [aggregation.variance(gradients.values()[0])]
+
+    m = Model(log_p)
+    param_dict = m.get_parameter_dict()
+    param_dict = {v: ".".join(k.split("/")[2:]) for k, v in param_dict.items()}
+    for k, v in gradients.items():
+        v.name = param_dict[v]
+        train_monitors.append(aggregation.mean(v))
 
     #------------------------------------------------------------
 
