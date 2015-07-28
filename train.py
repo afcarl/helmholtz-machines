@@ -191,19 +191,11 @@ def main(args):
         cost=log_ph,
         gradients=gradients,
         step_rule=CompositeRule([
+            Adam(args.learning_rate),
 #            RMSProp(args.learning_rate),
-            Momentum(args.learning_rate, 0.95),
+#            Momentum(args.learning_rate, 0.95),
             RemoveNotFinite(0.9),
         ])
-#        step_rule=Adam(learning_rate),
-#        step_rule=Momentum(learning_rate, 0.95),
-#        step_rule=CompositeRule([
-#                    StepClipping(1),
-#                    RMSProp(learning_rate),
-#                    Adam(learning_rate),
-#                    Scale(learning_rate=learning_rate),
-#                    BasicMomentum(0.95)),
-#        ])
     )
 
     #------------------------------------------------------------
@@ -229,7 +221,7 @@ def main(args):
         DataStream(
             data_train,
             iteration_scheme=ShuffledScheme(data_train.num_examples, args.batch_size)
-        ), 
+        ),
         which_sources='features')
     valid_stream = Flatten(
         DataStream(
