@@ -47,6 +47,7 @@ from blocks.utils import shared_floatx
 
 from blocks_extras.extensions.plot import PlotManager, Plotter, DisplayImage
 from blocks_extras.extensions.display import ImageDataStreamDisplay, WeightDisplay, ImageSamplesDisplay
+from blocks_extras.extensions.varmonitoring import VarianceMonitoring
 
 import helmholtz.datasets as datasets
 
@@ -209,12 +210,13 @@ def main(args):
                        aggregation.mean(algorithm.total_step_norm)]
                        #aggregation.std(gradients.values()[1])]
 
+    var_monitors = []
     m = Model(log_p)
     param_dict = m.get_parameter_dict()
-    param_dict = {v: ".".join(k.split("/")[2:]) for k, v in param_dict.items()}
+    param_dict = {v: "_".join(k.split("/")[2:]) for k, v in param_dict.items()}
     for k, v in gradients.items():
-        v.name = param_dict[v]
-        train_monitors.append(aggregation.mean(v))
+        v.name = param_dict[k]
+        var_monitors.append(aggregation.std(v))
 
     #------------------------------------------------------------
 
@@ -288,6 +290,13 @@ def main(args):
                         test_monitors,
                         data_stream=test_stream,
                         prefix="test",
+                        after_epoch=False,
+                        after_training=True,
+                        every_n_epochs=10),
+                    VarianceMonitoring(
+                        var_monitors,
+                        data_stream=test_stream,
+                        prefix="var",
                         after_epoch=False,
                         after_training=True,
                         every_n_epochs=10),
