@@ -40,8 +40,6 @@ class VarianceMonitoring(SimpleExtension, MonitoringExtension):
         each time monitoring is done.
 
     """
-    PREFIX_SEPARATOR = '_'
-
     def __init__(self, variables, data_stream, repeats=100, updates=None, **kwargs):
         kwargs.setdefault("after_epoch", True)
         kwargs.setdefault("before_first_epoch", True)
@@ -132,6 +130,9 @@ class VarianceEvaluator(object):
         self.theano_buffer.initialize_aggregators()
 
     def process_batch(self, batch):
+        if self._accumulate_fun is None:
+            return
+
         try:
             input_names = [v.name for v in self.unique_inputs]
             batch = dict_subset(batch, input_names)
@@ -140,8 +141,11 @@ class VarianceEvaluator(object):
                 "Not all data sources required for monitoring were"
                 " provided. The list of required data sources:"
                 " {}.".format(input_names))
-        if self._accumulate_fun is not None:
-            numerical_values = self._accumulate_fun(**batch)
+
+        # replicate
+        batch = OrderedDict([(k, numpy.v) for k, v in batch])
+
+        return self._accumulate_fun(**batch)
 
     def get_aggregated_values(self):
         return self.theano_buffer.get_aggregated_values()
