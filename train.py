@@ -266,7 +266,7 @@ def main(args):
                     TrainingDataMonitoring(
                         train_monitors,
                         prefix="train",
-                        after_batch=True),
+                        after_epoch=True),
                     DataStreamMonitoring(
                         valid_monitors,
                         data_stream=valid_stream,
