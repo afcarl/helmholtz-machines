@@ -1,5 +1,5 @@
 
-from __future__ import division, print_function 
+from __future__ import division, print_function
 
 import sys
 sys.path.append("../")
@@ -30,7 +30,7 @@ class ReweightedWakeSleep(HelmholtzMachine):
         super(ReweightedWakeSleep, self).__init__(p_layers, q_layers, **kwargs)
 
     def log_prob_p(self, samples):
-        """Calculate p(h_l | h_{l+1}) for all layers.  """
+        """Calculate p(h_l | h_{l+1}) for all layers. """
         n_layers = len(self.p_layers)
         n_samples = samples[0].shape[0]
 
@@ -42,16 +42,7 @@ class ReweightedWakeSleep(HelmholtzMachine):
         return log_p
 
     def log_prob_q(self, samples):
-        """Calculate q(h_{l+1} | h_l) for all layers *but the first one*.  
-
-        Parameters
-        ----------
-        samples : list 
-
-        Returns
-        -------
-        log_q : list 
-        """
+        """Calculate q(h_{l+1} | h_l) for all layers *but the first one*. """
         n_layers = len(self.p_layers)
         n_samples = samples[0].shape[0]
 
@@ -69,7 +60,7 @@ class ReweightedWakeSleep(HelmholtzMachine):
         p_layers = self.p_layers
         q_layers = self.q_layers
         n_layers = len(p_layers)
-        
+
         samples = [None] * n_layers
         log_p = [None] * n_layers
 
@@ -79,18 +70,18 @@ class ReweightedWakeSleep(HelmholtzMachine):
 
         # Get log_q
         log_q = self.log_prob_q(samples)
-    
+
         return samples, log_p, log_q
 
     @application(inputs=['features'], outputs=['samples', 'log_p', 'log_q'])
     def sample_q(self, features):
         """Sample from q(h|x).
 
-        Parameters 
+        Parameters
         ----------
         features : Tensor
 
-        Returns 
+        Returns
         -------
         samples : list
         log_p : list
@@ -101,7 +92,7 @@ class ReweightedWakeSleep(HelmholtzMachine):
         n_layers = len(p_layers)
 
         batch_size = features.shape[0]
-        
+
         samples = [None] * n_layers
         log_p = [None] * n_layers
         log_q = [None] * n_layers
@@ -116,14 +107,14 @@ class ReweightedWakeSleep(HelmholtzMachine):
         log_p[n_layers-1] = p_layers[n_layers-1].log_prob(samples[n_layers-1])
         for l in reversed(range(1, n_layers)):
             log_p[l-1] = p_layers[l-1].log_prob(samples[l-1], samples[l])
-            
+
         return samples, log_p, log_q
 
-    @application(inputs=['n_samples'], 
-                 outputs=['samples', 'log_p', 'log_q'])
+    @application(inputs=['n_samples'], outputs=['samples', 'log_p', 'log_q'])
     def sample(self, n_samples):
         return self.sample_p(n_amples)
 
+    @application(inputs=['samples', 'log_p', 'log_q', 'n_samples'], outputs=['w'])
     def importance_weights(self, samples, log_p, log_q, n_samples):
         """ Calculate importance weights for the given samples """
         p_layers = self.p_layers
@@ -136,14 +127,14 @@ class ReweightedWakeSleep(HelmholtzMachine):
         # Sum all layers
         log_p_all = sum(log_p)   # This is the python sum over a list
         log_q_all = sum(log_q)   # This is the python sum over a list
-    
+
         # Calculate sampling weights
         log_pq = (log_p_all-log_q_all)-tensor.log(n_samples)
         w_norm = logsumexp(log_pq, axis=1)
         log_w = log_pq-tensor.shape_padright(w_norm)
         w = tensor.exp(log_w)
-        
-        return w 
+
+        return w
 
     @application(inputs=['features', 'n_samples'], outputs=['log_px', 'log_psx'])
     def log_likelihood(self, features, n_samples):
@@ -219,55 +210,3 @@ class ReweightedWakeSleep(HelmholtzMachine):
             gradients = merge_gradients(gradients, q_layers[l].get_gradients(samples[l+1], samples[l]), 0.5)
 
         return log_px, log_px, gradients
-
-        """
-        if self.zreg > 0.0:
-            #zreg = batch_size * numpy.float32(self.zreg)
-            #zreg = numpy.float32(self.zreg)
-            #zreg = zreg.astype(floatX)
-            zreg = numpy.cast[floatX](self.zreg)
-
-            # And go down again...
-            samples, log_p, log_q = self.sample_p(batch_size)
-
-            # Sum all layers
-            log_p_all = sum(log_p)   # This is the python sum over a list
-            log_q_all = sum(log_q)   # This is the python sum over a list
-
-            _, log_q0 = self.log_likelihood(samples[0], n_samples)
-
-            log_w = (log_q0 + log_q_all - log_p_all) / 2
-            w_norm = logsumexp(log_w, axis=0)
-            log_w = log_w-w_norm
-            w = tensor.exp(log_w)
-
-            for l in xrange(n_layers-1):
-                gradients = merge_gradients(gradients, 
-                            p_layers[l].get_gradients(samples[l], samples[l+1], weights=w), 
-                            scale=zreg)
-                gradients = merge_gradients(gradients,
-                            q_layers[l].get_gradients(samples[l+1], samples[l], weights=w),
-                            scale=zreg)
- 
-        """
-
-        """
-        if True:
-            cost = 0
-            for l in xrange(n_layers-1):
-                cost = cost - (w * p_layers[l].log_prob(samples[l], samples[l+1])).mean()
-                cost = cost - (w * q_layers[l].log_prob(samples[l+1], samples[l])).mean()
-            cost = cost - (w * p_layers[-1].log_prob(samples[-1])).mean()
-
-            gradients = OrderedDict()
-            for l in xrange(n_layers-1):
-                for pname, param in Selector(p_layers[l]).get_params().iteritems():
-                    gradients[param] = tensor.grad(cost, param)
-                for pname, param in Selector(q_layers[l]).get_params().iteritems():
-                    gradients[param] = tensor.grad(cost, param)
-            for pname, param in Selector(p_layers[-1]).get_params().iteritems():
-                gradients[param] = tensor.grad(cost, param)
-        else:
-            pass
-        return log_psx, log_px, gradients
-       """
