@@ -130,9 +130,6 @@ def main(args):
 
         test_monitors.append(log_p)
         test_monitors.append(log_ph)
-        test_monitors.append(aggregation.std(log_p))
-        test_monitors.append(aggregation.std(log_ph))
-
 
     #------------------------------------------------------------
     # Gradient and training monitoring
@@ -144,10 +141,8 @@ def main(args):
     log_p.name  = "log_p"
     log_ph.name = "log_ph"
 
-    log_p_std = aggregation.std(log_p)
-
-    train_monitors = [log_p, log_ph, log_p_std]
-    valid_monitors = [log_p, log_ph, log_p_std]
+    train_monitors = [log_p, log_ph]
+    valid_monitors = [log_p, log_ph]
 
     #------------------------------------------------------------
     # Detailed monitoring
@@ -210,13 +205,19 @@ def main(args):
                        aggregation.mean(algorithm.total_step_norm)]
                        #aggregation.std(gradients.values()[1])]
 
+    #------------------------------------------------------------
+    # Monitor Variance
+
     var_monitors = []
+    var_monitors.append(log_p)
+    var_monitors.append(log_ph)
+
     m = Model(log_p)
     param_dict = m.get_parameter_dict()
     param_dict = {v: "_".join(k.split("/")[2:]) for k, v in param_dict.items()}
     for k, v in gradients.items():
-        v.name = param_dict[k]
-        var_monitors.append(aggregation.std(v))
+        v.name = "grad_{}".format(param_dict[k])
+        var_monitors.append(v)
 
     #------------------------------------------------------------
 
@@ -242,6 +243,12 @@ def main(args):
         DataStream(
             data_valid,
             iteration_scheme=SequentialScheme(data_valid.num_examples, args.batch_size)
+        ),
+        which_sources='features')
+    variance_stream = Flatten(
+        DataStream(
+            data_valid,
+            iteration_scheme=SequentialScheme(10, 1)
         ),
         which_sources='features')
     test_stream = Flatten(
@@ -295,9 +302,9 @@ def main(args):
                         every_n_epochs=10),
                     VarianceMonitoring(
                         var_monitors,
-                        data_stream=test_stream,
+                        repeats=100,
+                        data_stream=variance_stream,
                         prefix="var",
-                        after_epoch=False,
                         after_training=True,
                         every_n_epochs=10),
                     #SharedVariableModifier(
