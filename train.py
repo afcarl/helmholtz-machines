@@ -51,6 +51,7 @@ from blocks_extras.extensions.display import ImageDataStreamDisplay, WeightDispl
 import helmholtz.datasets as datasets
 
 from helmholtz import create_layers
+from helmholtz.vae import VAE
 from helmholtz.gmm import GMM
 from helmholtz.rws import ReweightedWakeSleep
 
@@ -75,17 +76,14 @@ def float_tag(value):
 
 
 #-----------------------------------------------------------------------------
+def vae_training():
+    return cost, train_monitors, valid_monitors, test_monitors
+
+#-----------------------------------------------------------------------------
 def main(args):
     """Run experiment. """
     lr_tag = float_tag(args.learning_rate)
     sizes_tag = args.layer_spec.replace(",", "-")
-
-    name = "%s-%s-%s-lr%s-dl%d-spl%d-%s" % \
-            (args.method, args.data, args.name, lr_tag, args.deterministic_layers, args.n_samples, sizes_tag)
-
-    #half_lr = 100
-
-    #------------------------------------------------------------
 
     x_dim, data_train, data_valid, data_test = datasets.get_data(args.data)
 
@@ -94,15 +92,36 @@ def main(args):
     deterministic_act = Tanh
     deterministic_size = 1.
 
-    p_layers, q_layers = create_layers(args.layer_spec, x_dim, args.deterministic_layers, deterministic_act, deterministic_size)
+    if args.method == 'vae':
+        layer_sizes = [int(i) for i in args.layer_spec.split(",")]
+        layer_sizes, z_dim = layer_sizes[:-1], layer_sizes[-1]
 
+        name = "%s-%s-%s-lr%s-spl%d-%s" % \
+            (args.data, args.method, args.name, lr_tag, args.n_samples, sizes_tag)
 
-    if args.method == 'rws':
+        model = VAE(x_dim=x_dim, hidden_layers=layer_sizes, z_dim=z_dim)
+    elif args.method == 'rws':
+        name = "%s-%s-%s-lr%s-dl%d-spl%d-%s" % \
+            (args.data, args.method, args.name, lr_tag, args.deterministic_layers, args.n_samples, sizes_tag)
+
+        p_layers, q_layers = create_layers(
+                                args.layer_spec, x_dim,
+                                args.deterministic_layers,
+                                deterministic_act, deterministic_size)
+
         model = ReweightedWakeSleep(
                 p_layers,
                 q_layers,
             )
     elif args.method == 'bihm-rws':
+        name = "%s-%s-%s-lr%s-dl%d-spl%d-%s" % \
+            (args.data, args.method, args.name, lr_tag, args.deterministic_layers, args.n_samples, sizes_tag)
+
+        p_layers, q_layers = create_layers(
+                                args.layer_spec, x_dim,
+                                args.deterministic_layers,
+                                deterministic_act, deterministic_size)
+
         model = GMM(
                 p_layers,
                 q_layers,
@@ -129,19 +148,30 @@ def main(args):
 
         test_monitors.append(log_p)
         test_monitors.append(log_ph)
- 
 
     #------------------------------------------------------------
     # Gradient and training monitoring
 
-    log_p, log_ph, gradients = model.get_gradients(x, args.n_samples)
-    log_p  = -log_p.mean()
-    log_ph = -log_ph.mean()
-    log_p.name  = "log_p"
-    log_ph.name = "log_ph"
+    if args.method == 'vae':
+        log_p_bound = model.log_likelihood_bound(x, args.n_samples)
+        gradients = None
+        log_p_bound  = -log_p_bound.mean()
+        log_p_bound.name  = "log_p_bound"
+        cost = log_p_bound
 
-    train_monitors = [log_p, log_ph]
-    valid_monitors = [log_p, log_ph]
+        train_monitors = [log_p_bound]
+        valid_monitors = [log_p_bound]
+        test_monitors.append(log_p_bound)
+    else:
+        log_p, log_ph, gradients = model.get_gradients(x, args.n_samples)
+        log_p  = -log_p.mean()
+        log_ph = -log_ph.mean()
+        log_p.name  = "log_p"
+        log_ph.name = "log_ph"
+        cost = log_ph
+
+        train_monitors = [log_p, log_ph]
+        valid_monitors = [log_p, log_ph]
 
     #------------------------------------------------------------
     # Detailed monitoring
@@ -183,12 +213,13 @@ def main(args):
         s.name = "samples_h%d" % i
         s.tag.aggregation_scheme = aggregation.TakeLast(s)
     """
-    cg = ComputationGraph([log_ph])
+    cg = ComputationGraph([cost])
 
     #------------------------------------------------------------
 
     algorithm = GradientDescent(
-        cost=log_ph,
+        cost=cost,
+        parameters=cg.parameters,
         gradients=gradients,
         step_rule=CompositeRule([
             Adam(args.learning_rate),
@@ -209,7 +240,7 @@ def main(args):
     train_stream, valid_stream, test_stream = (
             Flatten(DataStream(
                 data,
-                iteration_scheme=ShuffledScheme(data.num_examples, batch_size)
+                iteration_scheme=SequentialScheme(data.num_examples, batch_size)
             ), which_sources='features')
         for data, batch_size in ((data_train, args.batch_size),
                                  (data_valid, args.batch_size//2),
@@ -223,19 +254,8 @@ def main(args):
             iteration_scheme=ShuffledScheme(data_train.num_examples, args.batch_size)
         ),
         which_sources='features')
-    valid_stream = Flatten(
-        DataStream(
-            data_valid,
-            iteration_scheme=SequentialScheme(data_valid.num_examples, args.batch_size)
-        ),
-        which_sources='features')
-    test_stream = Flatten(
-        DataStream(
-            data_test,
-            iteration_scheme=SequentialScheme(data_test.num_examples, args.batch_size)
-        ),
-        which_sources='features')
 
+    # Live plotting?
     plotting_extensions = []
     if args.live_plotting:
         plotting_extensions = [
@@ -311,6 +331,17 @@ if __name__ == "__main__":
     parser.add_argument("--name", type=str, dest="name",
                 default="", help="Name for this experiment")
     subparsers = parser.add_subparsers(title="methods", dest="method")
+
+
+    # Variational Autoencoder
+    subparser = subparsers.add_parser("vae",
+                help="Variational Auto Encoder")
+    subparser.add_argument("--nsamples", "-s", type=int, dest="n_samples",
+                default=1, help="Number of IS samples")
+    subparser.add_argument("--activation", choices=['tanh', 'relu'], dest="activation",
+                default='tanh', help="Activation function")
+    subparser.add_argument("layer_spec", type=str, 
+                default="200,100", help="Comma seperated list of layer sizes (last is z-dim")
 
     # Reweighted Wake-Sleep
     subparser = subparsers.add_parser("rws",
