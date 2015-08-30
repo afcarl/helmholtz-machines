@@ -262,7 +262,7 @@ def main(args):
             PlotManager(
                 name,
                 [Plotter(channels=[
-                        ["valid_log_ph", "valid_log_p"],
+                        ["valid_%s" % cost.name, "valid_log_p"],
                         ["train_total_gradient_norm", "train_total_step_norm"]],
                     titles=[
                         "validation cost",
@@ -305,10 +305,9 @@ def main(args):
                     #    after_epoch=False,
                     #    after_batch=False,
                     #    every_n_epochs=half_lr),
-                    TrackTheBest('valid_log_p'),
-                    TrackTheBest('valid_log_ph'),
+                    TrackTheBest('valid_%s' % cost.name),
                     Checkpoint(name+".pkl", save_separately=['log', 'model']),
-                    FinishIfNoImprovementAfter('valid_log_p_best_so_far', epochs=10),
+                    FinishIfNoImprovementAfter('valid_%s_best_so_far' % cost.name, epochs=10),
                     FinishAfter(after_n_epochs=args.max_epochs),
                     Printing()] + plotting_extensions)
     main_loop.run()
