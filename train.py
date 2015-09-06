@@ -217,14 +217,21 @@ def main(args):
 
     #------------------------------------------------------------
 
+    if args.step_rule == "momentum":
+        step_rule = Momentum(args.learning_rate, 0.95)
+    elif args.step_rule == "rmsprop":
+        step_rule = RMSProp(args.learning_rate)
+    elif args.step_rule == "adam":
+        step_rule = RMSProp(args.learning_rate)
+    else:
+        raise "Unknoen step_rule %s" % args.step_rule
+
     algorithm = GradientDescent(
         cost=cost,
         parameters=cg.parameters,
         gradients=gradients,
         step_rule=CompositeRule([
-            Adam(args.learning_rate),
-#            RMSProp(args.learning_rate),
-#            Momentum(args.learning_rate, 0.95),
+            step_rule,
             RemoveNotFinite(0.9),
         ])
     )
@@ -307,7 +314,7 @@ def main(args):
                     #    every_n_epochs=half_lr),
                     TrackTheBest('valid_%s' % cost.name),
                     Checkpoint(name+".pkl", save_separately=['log', 'model']),
-                    FinishIfNoImprovementAfter('valid_%s_best_so_far' % cost.name, epochs=10),
+                    FinishIfNoImprovementAfter('valid_%s_best_so_far' % cost.name, epochs=args.patience),
                     FinishAfter(after_n_epochs=args.max_epochs),
                     Printing()] + plotting_extensions)
     main_loop.run()
@@ -317,30 +324,34 @@ def main(args):
 if __name__ == "__main__":
 
     parser = ArgumentParser()
+    parser.add_argument("--name", type=str, dest="name",
+                default="", help="Name for this experiment")
     parser.add_argument("--data", "-d", dest='data', choices=datasets.supported_datasets,
                 default='bmnist', help="Dataset to use")
     parser.add_argument("--live-plotting", "--plot", action="store_true", default=False,
                 help="Enable live plotting to a Bokkeh server")
-    parser.add_argument("--max-epochs", "--epochs", type=int, dest="max_epochs",
-                default=10000, help="Maximum # of training epochs to run")
     parser.add_argument("--bs", "--batch-size", type=int, dest="batch_size",
-                default=100, help="Size of each mini-batch")
+                default=100, help="Size of each mini-batch (default: 100)")
+    parser.add_argument("--step-rule", choices=['momentum', 'adam', 'rmsprop'], dest="step_rule",
+                default="adam", help="Chose SGD alrogithm (default: adam)"),
     parser.add_argument("--lr", "--learning-rate", type=float, dest="learning_rate",
                 default=1e-3, help="Learning rate")
-    parser.add_argument("--name", type=str, dest="name",
-                default="", help="Name for this experiment")
+    parser.add_argument("--max-epochs", "--epochs", type=int, dest="max_epochs",
+                default=10000, help="Maximum # of training epochs to run")
+    parser.add_argument("--early-stopping", type=int, dest="patience", 
+                default=10, help="Number of epochs without improvement (default: 10)")
     subparsers = parser.add_subparsers(title="methods", dest="method")
 
 
     # Variational Autoencoder
     subparser = subparsers.add_parser("vae",
-                help="Variational Auto Encoder")
+                help="Variational Auto Encoder with Gaussian latents and Bernoulli observed")
     subparser.add_argument("--nsamples", "-s", type=int, dest="n_samples",
                 default=1, help="Number of IS samples")
-    subparser.add_argument("--activation", choices=['tanh', 'relu'], dest="activation",
-                default='tanh', help="Activation function")
+    subparser.add_argument("--activation", choices=['tanh', 'logistic', 'relu'], dest="activation",
+                default='tanh', help="Activation function (last p(x|z) layer is always Logistic)")
     subparser.add_argument("layer_spec", type=str, 
-                default="200,100", help="Comma seperated list of layer sizes (last is z-dim")
+                default="200,100", help="Comma seperated list of layer sizes (last is z-dim)")
 
     # Reweighted Wake-Sleep
     subparser = subparsers.add_parser("rws",
