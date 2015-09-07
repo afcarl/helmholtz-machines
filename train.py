@@ -31,7 +31,7 @@ from fuel.streams import DataStream
 from fuel.transformers import Flatten
 
 from blocks.algorithms import GradientDescent, CompositeRule, Scale, Momentum, BasicMomentum, RMSProp, StepClipping, Adam, RemoveNotFinite
-from blocks.bricks import Tanh, Logistic
+from blocks.bricks import Tanh, Logistic, Rectifier
 from blocks.extensions import FinishAfter, Timing, Printing, ProgressBar
 from blocks.extensions.stopping import FinishIfNoImprovementAfter
 from blocks.extensions.saveload import Checkpoint
@@ -99,7 +99,16 @@ def main(args):
         name = "%s-%s-%s-lr%s-spl%d-%s" % \
             (args.data, args.method, args.name, lr_tag, args.n_samples, sizes_tag)
 
-        model = VAE(x_dim=x_dim, hidden_layers=layer_sizes, z_dim=z_dim)
+        if args.activation == "tanh":
+            hidden_act = Tanh()
+        elif args.activation == "logistic":
+            hidden_act = Logistic()
+        elif args.activation == "relu":
+            hidden_act = Rectifier()
+        else: 
+            raise "Unknown hidden nonlinearity %s" % args.hidden_act
+
+        model = VAE(x_dim=x_dim, hidden_layers=layer_sizes, hidden_act=hidden_act, z_dim=z_dim)
     elif args.method == 'rws':
         name = "%s-%s-%s-lr%s-dl%d-spl%d-%s" % \
             (args.data, args.method, args.name, lr_tag, args.deterministic_layers, args.n_samples, sizes_tag)
@@ -349,7 +358,7 @@ if __name__ == "__main__":
     subparser.add_argument("--nsamples", "-s", type=int, dest="n_samples",
                 default=1, help="Number of IS samples")
     subparser.add_argument("--activation", choices=['tanh', 'logistic', 'relu'], dest="activation",
-                default='tanh', help="Activation function (last p(x|z) layer is always Logistic)")
+                default='relu', help="Activation function (last p(x|z) layer is always Logistic; default: relu)")
     subparser.add_argument("layer_spec", type=str, 
                 default="200,100", help="Comma seperated list of layer sizes (last is z-dim)")
 
