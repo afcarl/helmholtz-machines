@@ -2,7 +2,6 @@
 from __future__ import division, print_function 
 
 import sys
-sys.path.append("../")
 
 import re
 import logging
@@ -14,12 +13,8 @@ from theano import tensor
 from collections import OrderedDict
 
 from blocks.bricks.base import application, Brick, lazy
-from blocks.bricks import Random, Initializable, MLP, Tanh, Logistic
-from blocks.filter import VariableFilter
-from blocks.graph import ComputationGraph
 from blocks.initialization import Uniform, IsotropicGaussian, Constant, Sparse, Identity
 from blocks.select import Selector
-from blocks.roles import PARAMETER
 
 from helmholtz import HelmholtzMachine
 from helmholtz import merge_gradients, flatten_values, unflatten_values
@@ -32,9 +27,9 @@ floatX = theano.config.floatX
 #-----------------------------------------------------------------------------
 
 
-class GMM(HelmholtzMachine):
+class BiHM(HelmholtzMachine):
     def __init__(self, p_layers, q_layers, zreg=0.0, transpose_init=False, **kwargs):
-        super(GMM, self).__init__(p_layers, q_layers, **kwargs)
+        super(BiHM, self).__init__(p_layers, q_layers, **kwargs)
 
         self.transpose_init = transpose_init
         self.zreg = zreg

@@ -51,9 +51,9 @@ from blocks_extras.extensions.display import ImageDataStreamDisplay, WeightDispl
 import helmholtz.datasets as datasets
 
 from helmholtz import create_layers
-from helmholtz.vae import VAE
-from helmholtz.gmm import GMM
+from helmholtz.bihm import BiHM
 from helmholtz.rws import ReweightedWakeSleep
+from helmholtz.vae import VAE
 
 floatX = theano.config.floatX
 fuel.config.floatX = floatX
@@ -131,7 +131,7 @@ def main(args):
                                 args.deterministic_layers,
                                 deterministic_act, deterministic_size)
 
-        model = GMM(
+        model = BiHM(
                 p_layers,
                 q_layers,
             )
