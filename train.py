@@ -52,6 +52,7 @@ import helmholtz.datasets as datasets
 
 from helmholtz import create_layers
 from helmholtz.bihm import BiHM
+from helmholtz.dvae import DVAE
 from helmholtz.rws import ReweightedWakeSleep
 from helmholtz.vae import VAE
 
@@ -109,6 +110,23 @@ def main(args):
             raise "Unknown hidden nonlinearity %s" % args.hidden_act
 
         model = VAE(x_dim=x_dim, hidden_layers=layer_sizes, hidden_act=hidden_act, z_dim=z_dim)
+    elif args.method == 'dvae':
+        layer_sizes = [int(i) for i in args.layer_spec.split(",")]
+        layer_sizes, z_dim = layer_sizes[:-1], layer_sizes[-1]
+
+        name = "%s-%s-%s-lr%s-spl%d-%s" % \
+            (args.data, args.method, args.name, lr_tag, args.n_samples, sizes_tag)
+
+        if args.activation == "tanh":
+            hidden_act = Tanh()
+        elif args.activation == "logistic":
+            hidden_act = Logistic()
+        elif args.activation == "relu":
+            hidden_act = Rectifier()
+        else: 
+            raise "Unknown hidden nonlinearity %s" % args.hidden_act
+
+        model = DVAE(x_dim=x_dim, hidden_layers=layer_sizes, hidden_act=hidden_act, z_dim=z_dim)
     elif args.method == 'rws':
         name = "%s-%s-%s-lr%s-dl%d-spl%d-%s" % \
             (args.data, args.method, args.name, lr_tag, args.deterministic_layers, args.n_samples, sizes_tag)
@@ -161,7 +179,7 @@ def main(args):
     #------------------------------------------------------------
     # Gradient and training monitoring
 
-    if args.method == 'vae':
+    if args.method in ['vae', 'dvae']:
         log_p_bound = model.log_likelihood_bound(x, args.n_samples)
         gradients = None
         log_p_bound  = -log_p_bound.mean()
@@ -356,7 +374,17 @@ if __name__ == "__main__":
     subparser = subparsers.add_parser("vae",
                 help="Variational Auto Encoder with Gaussian latents and Bernoulli observed")
     subparser.add_argument("--nsamples", "-s", type=int, dest="n_samples",
-                default=1, help="Number of IS samples")
+                default=1, help="Number of samples")
+    subparser.add_argument("--activation", choices=['tanh', 'logistic', 'relu'], dest="activation",
+                default='relu', help="Activation function (last p(x|z) layer is always Logistic; default: relu)")
+    subparser.add_argument("layer_spec", type=str, 
+                default="200,100", help="Comma seperated list of layer sizes (last is z-dim)")
+
+    # Descrete Variational Autoencoder
+    subparser = subparsers.add_parser("dvae",
+                help="Discrete Variational Auto Encoder with Bernoulli latents and observed")
+    subparser.add_argument("--nsamples", "-s", type=int, dest="n_samples",
+                default=1, help="Number of samples")
     subparser.add_argument("--activation", choices=['tanh', 'logistic', 'relu'], dest="activation",
                 default='relu', help="Activation function (last p(x|z) layer is always Logistic; default: relu)")
     subparser.add_argument("layer_spec", type=str, 
