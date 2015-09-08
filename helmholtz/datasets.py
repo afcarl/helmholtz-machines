@@ -3,7 +3,7 @@ from __future__ import division
 
 
 local_datasets = ["adult", "dna", "web", "nips", "mushrooms", "ocr_letters", "connect4", "rcv1"]
-supported_datasets = local_datasets + ['bmnist', 'bars', 'silhouettes']
+supported_datasets = local_datasets + ['bmnist', 'remnist', 'bars', 'silhouettes']
 
 # 'tfd' is missing but needs normalization 
 
@@ -16,6 +16,14 @@ def get_data(data_name):
         data_train = BinarizedMNIST(which_sets=['train'], sources=['features'])
         data_valid = BinarizedMNIST(which_sets=['valid'], sources=['features'])
         data_test  = BinarizedMNIST(which_sets=['test'], sources=['features'])
+    elif data_name == 'remnist':
+        from fuel.datasets.mnist import MNIST
+
+        x_dim = 28*28 
+
+        data_train = MNIST(which_sets=['train'], sources=['features'])
+        data_valid = MNIST(which_sets=['test'], sources=['features'])
+        data_test  = MNIST(which_sets=['test'], sources=['features'])
     elif data_name == 'silhouettes':
         from fuel.datasets.caltech101_silhouettes import CalTech101Silhouettes
 

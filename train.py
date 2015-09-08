@@ -76,6 +76,27 @@ def float_tag(value):
     return "%s%d" % (leading, -exp)
 
 
+
+#-----------------------------------------------------------------------------
+from fuel.transformers import Transformer
+
+class Sample(Transformer):
+    produces_examples = False
+
+    def __init__(self, data_stream, scale=1., shift=0., **kwargs):
+        self.scale = scale
+        self.shift = shift
+        super(Sample, self).__init__(
+                                data_stream,
+                                data_stream.produces_examples,
+                                **kwargs)
+
+    def transform_batch(self, batch):
+        batch = ( a*self.scale + self.shift for a in batch)
+        batch = ( a >= np.random.uniform(size=a.shape, low=0, high=1.) for a in batch)
+        batch = ( a.astype(floatX) for a in batch)
+        return batch
+
 #-----------------------------------------------------------------------------
 def vae_training():
     return cost, train_monitors, valid_monitors, test_monitors
@@ -270,16 +291,29 @@ def main(args):
 
     #------------------------------------------------------------
 
+
     # Out usual train/valid/test data streams...
-    train_stream, valid_stream, test_stream = (
+    if args.data == "remnist":
+        train_stream, valid_stream, test_stream = (
+            Sample(Flatten(DataStream(
+                data,
+                iteration_scheme=SequentialScheme(data.num_examples, batch_size)
+            ), which_sources='features'), scale=1./255.)
+            for data, batch_size in ((data_train, args.batch_size),
+                                    (data_valid, args.batch_size//2),
+                                    (data_test, args.batch_size//2))
+        )
+    else:
+        train_stream, valid_stream, test_stream = (
             Flatten(DataStream(
                 data,
                 iteration_scheme=SequentialScheme(data.num_examples, batch_size)
             ), which_sources='features')
-        for data, batch_size in ((data_train, args.batch_size),
-                                 (data_valid, args.batch_size//2),
-                                 (data_test, args.batch_size//2))
-    )
+            for data, batch_size in ((data_train, args.batch_size),
+                                    (data_valid, args.batch_size//2),
+                                    (data_test, args.batch_size//2))
+        )
+ 
 
     # A single datapooint per for detailed gradient monitoring...
     gradient_stream = Flatten(
