@@ -15,7 +15,7 @@ from blocks.initialization import Uniform, IsotropicGaussian, Constant, Sparse, 
 
 from helmholtz import HelmholtzMachine
 from prob_layers import replicate_batch, logsumexp
-from prob_layers import GaussianLayer, BernoulliLayer
+from prob_layers import BernoulliLayer, BernoulliTopLayer
 from initialization import RWSInitialization
 
 logger = logging.getLogger(__name__)
@@ -45,10 +45,9 @@ class DVAE(HelmholtzMachine, Random):
 
         self.q = BernoulliLayer(q_mlp, name="q")
         self.p = BernoulliLayer(p_mlp, name="p")
+        self.p_top = BernoulliTopLayer(z_dim, **inits)
 
-        self.prior_prob = 0.5 * numpy.ones(z_dim)
-
-        self.children = [self.p, self.q]
+        self.children = [self.p_top, self.p, self.q]
 
 
     @application(inputs=['n_samples'], 
@@ -74,9 +73,7 @@ class DVAE(HelmholtzMachine, Random):
 
         z, log_q = self.q.sample(x)
         log_p = self.p.log_prob(x, z)     # p(x|z)
-        log_p += tensor.sum(              # p(z) prior
-            z*tensor.log(self.prior_prob) + (1.-z)*tensor.log(1-self.prior_prob),
-            axis=1)
+        log_p += self.p_top.log_prob(z)   # p(z) prior
 
         log_q = log_q.reshape([batch_size, n_samples])
         log_p = log_p.reshape([batch_size, n_samples])
@@ -90,27 +87,29 @@ class DVAE(HelmholtzMachine, Random):
         """Compute the LL bound. """
         batch_size = features.shape[0]
 
-        z_pi = self.q.sample_expected(features)
+        z_prob = self.q.sample_expected(features)
 
         # Recosntruction...
-        features_r    = replicate_batch(features, n_samples)
-        z_pi_r        = replicate_batch(z_pi, n_samples)
+        features_r = replicate_batch(features, n_samples)
+        z_prob_r   = replicate_batch(z_prob, n_samples)
 
         rho = self.theano_rng.uniform(
-                    size=z_pi_r.shape, 
+                    size=z_prob_r.shape, 
                     low=0, high=1.,
-                    dtype=z_pi.dtype) 
+                    dtype=z_prob.dtype) 
 
-        z_r = tensor.switch(rho >= 1-z_pi_r, (rho-1)/z_pi_r + 1, 0.)
+        z_r = tensor.switch(rho >= 1-z_prob_r, (rho-1)/z_prob_r + 1, 0.)
 
         recons_term = self.p.log_prob(features_r, z_r)
         recons_term = recons_term.reshape([batch_size, n_samples])
         recons_term = tensor.sum(recons_term, axis=1) / n_samples
 
         # KL divergence
+        prior_prob = self.p_top.sample_expected()
+
         per_dim_kl = (
-                self.prior_prob * tensor.log(self.prior_prob/z_pi_r) +
-                (1-self.prior_prob) * tensor.log((1-self.prior_prob)/(1-z_pi_r)))
+                prior_prob * tensor.log(prior_prob/z_prob_r) +
+                (1-prior_prob) * tensor.log((1-prior_prob)/(1-z_prob_r)))
         kl_term = per_dim_kl.sum(axis=1)
         kl_term.name = 'kl_term'
 
