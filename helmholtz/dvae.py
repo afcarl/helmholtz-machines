@@ -45,7 +45,7 @@ class DVAE(HelmholtzMachine, Random):
 
         self.q = BernoulliLayer(q_mlp, name="q")
         self.p = BernoulliLayer(p_mlp, name="p")
-        self.p_top = BernoulliTopLayer(z_dim, **inits)
+        self.p_top = BernoulliTopLayer(z_dim, biases_init=Constant(0.0))
 
         self.children = [self.p_top, self.p, self.q]
 
@@ -108,8 +108,9 @@ class DVAE(HelmholtzMachine, Random):
         prior_prob = self.p_top.sample_expected()
 
         per_dim_kl = (
-                prior_prob * tensor.log(prior_prob/z_prob) +
-                (1-prior_prob) * tensor.log((1-prior_prob)/(1-z_prob)))
+                   prior_prob  * (tensor.log(  prior_prob)-tensor.log(  z_prob)) +
+                (1-prior_prob) * (tensor.log(1-prior_prob)-tensor.log(1-z_prob))
+        )
         kl_term = per_dim_kl.sum(axis=1)
         kl_term.name = 'kl_term'
 

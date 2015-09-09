@@ -312,7 +312,7 @@ def main(args):
         ]
 
     main_loop = MainLoop(
-        model=Model(log_ph),
+        model=Model(cost),
         data_stream=train_stream,
         algorithm=algorithm,
         extensions=[Timing(),
