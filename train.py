@@ -76,6 +76,10 @@ def float_tag(value):
     return "%s%d" % (leading, -exp)
 
 
+def named(var, name):
+    var.name = name
+    return var
+
 #-----------------------------------------------------------------------------
 def vae_training():
     return cost, train_monitors, valid_monitors, test_monitors
@@ -165,6 +169,8 @@ def main(args):
     #------------------------------------------------------------
     # Testset monitoring
 
+    train_monitors = []
+    valid_monitors = []
     test_monitors = []
     for s in [1, 10, 100, 1000]:
         log_p, log_ph = model.log_likelihood(x, s)
@@ -173,8 +179,9 @@ def main(args):
         log_p.name  = "log_p_%d" % s
         log_ph.name = "log_ph_%d" %s
 
-        test_monitors.append(log_p)
-        test_monitors.append(log_ph)
+        #train_monitors += [log_p, log_ph]
+        #valid_monitors += [log_p, log_ph]
+        test_monitors += [log_p, log_ph]
 
     #------------------------------------------------------------
     # Gradient and training monitoring
@@ -186,9 +193,9 @@ def main(args):
         log_p_bound.name  = "log_p_bound"
         cost = log_p_bound
 
-        train_monitors = [log_p_bound]
-        valid_monitors = [log_p_bound]
-        test_monitors.append(log_p_bound)
+        train_monitors += [log_p_bound, named(model.kl_term.mean(), 'kl_term'), named(model.recons_term.mean(), 'recons_term')]
+        valid_monitors += [log_p_bound, named(model.kl_term.mean(), 'kl_term'), named(model.recons_term.mean(), 'recons_term')]
+        test_monitors  += [log_p_bound, named(model.kl_term.mean(), 'kl_term'), named(model.recons_term.mean(), 'recons_term')]
     else:
         log_p, log_ph, gradients = model.get_gradients(x, args.n_samples)
         log_p  = -log_p.mean()
@@ -197,8 +204,8 @@ def main(args):
         log_ph.name = "log_ph"
         cost = log_ph
 
-        train_monitors = [log_p, log_ph]
-        valid_monitors = [log_p, log_ph]
+        train_monitors += [log_p, log_ph]
+        valid_monitors += [log_p, log_ph]
 
     #------------------------------------------------------------
     # Detailed monitoring
@@ -251,11 +258,15 @@ def main(args):
     elif args.step_rule == "adam":
         step_rule = RMSProp(args.learning_rate)
     else:
-        raise "Unknoen step_rule %s" % args.step_rule
+        raise "Unknown step_rule %s" % args.step_rule
+
+    #parameters = cg.parameters[:4] + cg.parameters[5:]
+    parameters = cg.parameters
+    print(parameters)
 
     algorithm = GradientDescent(
         cost=cost,
-        parameters=cg.parameters,
+        parameters=parameters,
         gradients=gradients,
         step_rule=CompositeRule([
             step_rule,

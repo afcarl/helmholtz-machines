@@ -103,6 +103,7 @@ class DVAE(HelmholtzMachine, Random):
         recons_term = self.p.log_prob(features_r, z_r)
         recons_term = recons_term.reshape([batch_size, n_samples])
         recons_term = tensor.sum(recons_term, axis=1) / n_samples
+        recons_term.name = 'recons_term'
 
         # KL divergence
         prior_prob = self.p_top.sample_expected()
@@ -113,6 +114,9 @@ class DVAE(HelmholtzMachine, Random):
         )
         kl_term = per_dim_kl.sum(axis=1)
         kl_term.name = 'kl_term'
+
+        self.recons_term = recons_term
+        self.kl_term = kl_term
 
         log_p_bound = recons_term - kl_term
 
