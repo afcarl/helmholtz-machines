@@ -13,10 +13,11 @@ from blocks.bricks.base import application, Brick, lazy
 from blocks.bricks import Random, Initializable, MLP, Logistic
 from blocks.initialization import Uniform, IsotropicGaussian, Constant, Sparse, Identity
 
+from batch_normalization import BatchNormalization, BatchNormalizedMLP
 from helmholtz import HelmholtzMachine
+from initialization import RWSInitialization
 from prob_layers import replicate_batch, logsumexp
 from prob_layers import BernoulliLayer, BernoulliTopLayer
-from initialization import RWSInitialization
 
 logger = logging.getLogger(__name__)
 floatX = theano.config.floatX
@@ -40,8 +41,10 @@ class DVAE(HelmholtzMachine, Random):
 
         hidden_act = [hidden_act]*len(hidden_layers)
 
-        q_mlp = MLP(hidden_act+[Logistic()], [x_dim]+hidden_layers+[z_dim], **inits)
-        p_mlp = MLP(hidden_act+[Logistic()], [z_dim]+hidden_layers+[x_dim], **inits)
+        q_mlp = BatchNormalizedMLP(hidden_act+[Logistic()], [x_dim]+hidden_layers+[z_dim], **inits)
+        #q_mlp = MLP(hidden_act+[Logistic()], [x_dim]+hidden_layers+[z_dim], **inits)
+        p_mlp = BatchNormalizedMLP(hidden_act+[Logistic()], [z_dim]+hidden_layers+[x_dim], **inits)
+        #p_mlp = MLP(hidden_act+[Logistic()], [z_dim]+hidden_layers+[x_dim], **inits)
 
         self.q = BernoulliLayer(q_mlp, name="q")
         self.p = BernoulliLayer(p_mlp, name="p")
