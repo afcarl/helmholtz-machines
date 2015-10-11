@@ -72,12 +72,33 @@ class DVAE(HelmholtzMachine, Random):
     def log_likelihood(self, features, n_samples):
         batch_size = features.shape[0]
 
-        x = replicate_batch(features, n_samples)
+        prior_z_prob = self.p_top.sample_expected()
+        prior_z_prob = tensor.shape_padleft(prior_z_prob)
 
-        z, log_q = self.q.sample(x)
-        log_p = self.p.log_prob(x, z)     # p(x|z)
-        log_p += self.p_top.log_prob(z)   # p(z) prior
+        z_prob = self.q.sample_expected(features)
 
+        z_prob   = replicate_batch(z_prob, n_samples)
+        features = replicate_batch(features, n_samples)
+
+        rho = self.theano_rng.uniform(
+                    size=z_prob.shape, 
+                    low=0, high=1.,
+                    dtype=z_prob.dtype) 
+
+        a = (rho-1)/z_prob + 1
+        xi = tensor.switch(a > 0., a, 0)
+
+        # q(xi|x)
+        log_q = tensor.switch(a > 0., z_prob, 1-z_prob)
+        log_q = tensor.log(log_q).sum(axis=1)
+
+        # p(xi) priot
+        log_p = tensor.switch(a > 0., prior_z_prob, 1-prior_z_prob)
+        log_p = tensor.log(log_p).sum(axis=1)
+
+        # + p(x|xi)
+        log_p += self.p.log_prob(features, xi)                                  # + p(x|xi)
+        
         log_q = log_q.reshape([batch_size, n_samples])
         log_p = log_p.reshape([batch_size, n_samples])
         log_px = logsumexp(log_p-log_q, axis=1) - tensor.log(n_samples)
