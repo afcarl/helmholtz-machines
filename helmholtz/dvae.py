@@ -73,9 +73,11 @@ class DVAE(HelmholtzMachine, Random):
         batch_size = features.shape[0]
 
         prior_z_prob = self.p_top.sample_expected()
+        prior_z_prob = prior_z_prob.clip(1e-10, 1-1e-10)
         prior_z_prob = tensor.shape_padleft(prior_z_prob)
 
         z_prob = self.q.sample_expected(features)
+        z_prob = z_prob.clip(1e-10, 1-1e-10)
 
         z_prob   = replicate_batch(z_prob, n_samples)
         features = replicate_batch(features, n_samples)
@@ -88,20 +90,20 @@ class DVAE(HelmholtzMachine, Random):
         a = (rho-1)/z_prob + 1
         xi = tensor.switch(a > 0., a, 0)
 
-        # q(xi|x)
+        # q(xi|x) approximate posterior
         log_q = tensor.switch(a > 0., z_prob, 1-z_prob)
         log_q = tensor.log(log_q).sum(axis=1)
 
-        # p(xi) priot
+        # p(xi) prior
         log_p = tensor.switch(a > 0., prior_z_prob, 1-prior_z_prob)
         log_p = tensor.log(log_p).sum(axis=1)
 
         # + p(x|xi)
-        log_p += self.p.log_prob(features, xi)                                  # + p(x|xi)
-        
-        log_q = log_q.reshape([batch_size, n_samples])
-        log_p = log_p.reshape([batch_size, n_samples])
-        log_px = logsumexp(log_p-log_q, axis=1) - tensor.log(n_samples)
+        log_p += self.p.log_prob(features, xi)
+       
+        log_pq = log_p-log_q
+        log_pq = log_pq.reshape([batch_size, n_samples])
+        log_px = logsumexp(log_pq, axis=1) - tensor.log(n_samples)
 
         return log_px, log_px
 
@@ -113,7 +115,7 @@ class DVAE(HelmholtzMachine, Random):
 
         z_prob = self.q.sample_expected(features)
 
-        # Recosntruction...
+        # Reconstruction...
         features_r = replicate_batch(features, n_samples)
         z_prob_r   = replicate_batch(z_prob, n_samples)
 
@@ -122,7 +124,8 @@ class DVAE(HelmholtzMachine, Random):
                     low=0, high=1.,
                     dtype=z_prob.dtype) 
 
-        z_r = tensor.switch(rho >= 1-z_prob_r, (rho-1)/z_prob_r + 1, 0.)
+        xi = (rho-1)/z_prob_r + 1
+        z_r = tensor.switch(xi > 0., xi, 0)
 
         recons_term = self.p.log_prob(features_r, z_r)
         recons_term = recons_term.reshape([batch_size, n_samples])
