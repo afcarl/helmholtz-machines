@@ -49,10 +49,10 @@ class BatchNormalization(Initializable, Random):
 
     @application(inputs=['x'], outputs=['x_hat'])
     def apply(self, x):
-        eps = 1e-3
+        eps = 1e-5
 
-        mu = tensor.mean(x, axis=0)                           # shape: dim
-        var = tensor.mean(x-tensor.shape_padleft(mu), axis=0) # shape: dim
+        mu = tensor.mean(x, axis=0)                  # shape: dim
+        var = tensor.mean( (x-mu)**2, axis=0)        # shape: dim
 
         x_hat = (x - mu) / tensor.sqrt(var + eps)
         return self.gamma*x_hat + self.beta
