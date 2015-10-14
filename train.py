@@ -30,7 +30,7 @@ from fuel.schemes import ShuffledScheme, SequentialScheme
 from fuel.streams import DataStream
 from fuel.transformers import Flatten
 
-from blocks.algorithms import GradientDescent, CompositeRule, Scale, Momentum, BasicMomentum, RMSProp, StepClipping, Adam, RemoveNotFinite
+from blocks.algorithms import GradientDescent, CompositeRule, Scale, Momentum, Momentum, RMSProp, Adam, StepClipping, RemoveNotFinite
 from blocks.bricks import Tanh, Logistic, Rectifier
 from blocks.extensions import FinishAfter, Timing, Printing, ProgressBar
 from blocks.extensions.stopping import FinishIfNoImprovementAfter
@@ -258,7 +258,7 @@ def main(args):
     elif args.step_rule == "rmsprop":
         step_rule = RMSProp(args.learning_rate)
     elif args.step_rule == "adam":
-        step_rule = RMSProp(args.learning_rate)
+        step_rule = Adam(args.learning_rate)
     else:
         raise "Unknown step_rule %s" % args.step_rule
 
@@ -271,6 +271,7 @@ def main(args):
         parameters=parameters,
         gradients=gradients,
         step_rule=CompositeRule([
+            #StepClipping(25),
             step_rule,
             RemoveNotFinite(0.9),
         ])
