@@ -13,10 +13,7 @@ from blocks.bricks.base import application, _Brick, Brick, lazy
 from blocks.roles import add_role, PARAMETER, WEIGHT, BIAS
 from blocks.bricks import Random, MLP, Initializable
 from blocks.utils import pack, shared_floatx_zeros
-
 from blocks.select import Selector
-from blocks.filter import VariableFilter
-from blocks.graph import ComputationGraph
 
 from distributions import bernoulli
 
