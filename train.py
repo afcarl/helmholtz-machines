@@ -172,6 +172,7 @@ def main(args):
     train_monitors = []
     valid_monitors = []
     test_monitors = []
+    """
     for s in [1, 10, 100, 1000]:
         log_p, log_ph = model.log_likelihood(x, s)
         log_p  = -log_p.mean()
@@ -182,6 +183,7 @@ def main(args):
         #train_monitors += [log_p, log_ph]
         #valid_monitors += [log_p, log_ph]
         test_monitors += [log_p, log_ph]
+    """
 
     #------------------------------------------------------------
     # Gradient and training monitoring
@@ -288,8 +290,10 @@ def main(args):
                 iteration_scheme=SequentialScheme(data.num_examples, batch_size)
             ), which_sources='features')
         for data, batch_size in ((data_train, args.batch_size),
-                                 (data_valid, args.batch_size//2),
-                                 (data_test, args.batch_size//2))
+                                 (data_valid, data_valid.num_examples),
+                                 (data_test, data_test.num_examples))
+#                                 (data_valid, args.batch_size//2),
+#                                 (data_test, args.batch_size//2))
     )
 
     # A single datapooint per for detailed gradient monitoring...
