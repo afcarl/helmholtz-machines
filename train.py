@@ -172,6 +172,7 @@ def main(args):
     train_monitors = []
     valid_monitors = []
     test_monitors = []
+    """
     for s in [1, 10, 100, 1000]:
         log_p, log_ph = model.log_likelihood(x, s)
         log_p  = -log_p.mean()
@@ -182,6 +183,7 @@ def main(args):
         #train_monitors += [log_p, log_ph]
         #valid_monitors += [log_p, log_ph]
         test_monitors += [log_p, log_ph]
+    """
 
     #------------------------------------------------------------
     # Gradient and training monitoring
@@ -280,7 +282,6 @@ def main(args):
                        aggregation.mean(algorithm.total_step_norm)]
 
     #------------------------------------------------------------
-
 
     # Live plotting?
     plotting_extensions = []

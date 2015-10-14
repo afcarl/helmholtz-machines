@@ -34,8 +34,8 @@ class DVAE(HelmholtzMachine, Random):
         super(DVAE, self).__init__([], [], **kwargs)
 
         inits = {
-            #'weights_init': IsotropicGaussian(std=0.1),
-            'weights_init': RWSInitialization(factor=1.),
+            'weights_init': IsotropicGaussian(std=0.1),
+            #'weights_init': RWSInitialization(factor=1.),
             'biases_init': Constant(0.0),
         }
 
