@@ -24,7 +24,7 @@ from progressbar import ProgressBar
 
 from blocks.main_loop import MainLoop
 
-from helmholtz.gmm import GMM
+from helmholtz.bihm import BiHM
 from helmholtz.rws import ReweightedWakeSleep
 from helmholtz.prob_layers import replicate_batch, logsumexp
 
@@ -208,7 +208,7 @@ if __name__ == "__main__":
     while len(brick.parents) > 0:
         brick = brick.parents[0]
 
-    assert isinstance(brick, (ReweightedWakeSleep, GMM))
+    assert isinstance(brick, (ReweightedWakeSleep, BiHM))
 
     if args.shape is not None:
         img_shape = [int(i) for i in args.shape.split(',')]
