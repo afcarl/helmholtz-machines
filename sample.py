@@ -71,6 +71,156 @@ def img_grid(arr, global_scale=True):
     I = (255*I).astype(np.uint8)
     return Image.fromarray(I)
 
+
+def sample_rws(brick, args):
+    assert isinstance(brick, ReweightedWakeSleep)
+
+
+    #----------------------------------------------------------------------
+    # Compile functions
+    logger.info("Compiling function...")
+
+    n_samples = tensor.iscalar('n_samples')
+
+    samples, log_p, log_q = brick.sample(n_samples)
+
+    if args.expected:
+        # Ok, take the second last and sample expected
+        x = brick.p_layers[0].sample_expected(samples[1])
+    else:
+        x = samples[0]
+
+    x = x.reshape([n_samples]+img_shape)
+
+    do_sample = theano.function(
+                        [n_samples, oversample], 
+                        [x, log_w],
+                        name="do_sample", allow_input_downcast=True)
+
+    #----------------------------------------------------------------------
+    #----------------------------------------------------------------------
+    logger.info("Sample from p(x, h) ...")
+    
+    x_p, h1 = do_sample_p(n_samples)
+    img = img_grid(x_p, global_scale=True)
+
+    fname = os.path.splitext(args.experiment)[0]
+    fname += "-psamples.png"
+
+    logger.info("Saving %s ..." % fname)
+    img_p.save(fname)
+    
+    if args.show:
+        import pylab
+
+        pylab.figure()
+        pylab.gray()
+        pylab.axis('off')
+        pylab.imshow(img, interpolation='nearest')
+
+        pylab.show(block=True)
+
+ 
+def sample_bihm(brick, args):
+    assert isinstance(brick, (BiHM, GMM))
+
+    #----------------------------------------------------------------------
+    # Compile functions
+    logger.info("Compiling function...")
+
+    n_inner = tensor.iscalar('n_inner')
+    n_samples = tensor.iscalar('n_samples')
+    oversample = tensor.iscalar('oversample')
+
+    samples, log_w = brick.sample(n_samples, oversample=oversample, n_inner=n_inner)
+
+    if args.expected:
+        # Ok, take the second last and sample expected
+        x = brick.p_layers[0].sample_expected(samples[1])
+    else:
+        x = samples[0]
+
+    x = x.reshape([n_samples]+img_shape)
+
+    do_sample = theano.function(
+                        [n_samples, oversample, n_inner], 
+                        [x, log_w],
+                        name="do_sample", allow_input_downcast=True)
+
+    #----------------------------------------------------------------------
+
+    n_samples = tensor.iscalar('n_samples')
+
+    samples, _, _ = brick.sample_p(n_samples)
+
+    if args.expected:
+        # Ok, take the second last and sample expected
+        x_p = brick.p_layers[0].sample_expected(samples[1])
+    else:
+        x_p = samples[0]
+
+    x_p = x_p.reshape([n_samples]+img_shape)
+
+    do_sample_p = theano.function(
+                        [n_samples], 
+                        [x_p, samples[1]],
+                        name="do_sample_p", allow_input_downcast=True)
+
+
+
+
+    #----------------------------------------------------------------------
+    #----------------------------------------------------------------------
+    logger.info("Sample from model...")
+
+    n_layers = len(brick.p_layers)
+    n_samples = args.nsamples
+
+    x = [None] * n_samples
+    log_w = [None] * n_samples
+    progress = ProgressBar()
+    for n in progress(xrange(n_samples)):
+        x[n], log_w[n] = do_sample(1, args.oversample, args.ninner)
+     
+    x = np.concatenate(x)
+    img = img_grid(x, global_scale=True)
+
+    fname = os.path.splitext(args.experiment)[0]
+    fname += "-samples.png"
+
+    logger.info("Saving %s ..." % fname)
+    img.save(fname)
+
+    #----------------------------------------------------------------------
+    logger.info("Sample from p(x, h) ...")
+    
+    x_p, h1 = do_sample_p(n_samples)
+    img_p = img_grid(x_p, global_scale=True)
+
+    fname = os.path.splitext(args.experiment)[0]
+    fname += "-psamples.png"
+
+    logger.info("Saving %s ..." % fname)
+    img_p.save(fname)
+    
+    np.save("h1.npy", h1)
+
+    if args.show:
+        import pylab
+
+        pylab.figure()
+        pylab.gray()
+        pylab.axis('off')
+        pylab.imshow(img, interpolation='nearest')
+
+        pylab.figure()
+        pylab.gray()
+        pylab.axis('off')
+        pylab.imshow(img_p, interpolation='nearest')
+ 
+        pylab.show(block=True)
+
+
 #-----------------------------------------------------------------------------
 
 if __name__ == "__main__":
@@ -100,8 +250,6 @@ if __name__ == "__main__":
     while len(brick.parents) > 0:
         brick = brick.parents[0]
 
-    assert isinstance(brick, (ReweightedWakeSleep, GMM))
-
     if args.shape is not None:
         img_shape = [int(i) for i in args.shape.split(',')]
     else:
@@ -109,93 +257,13 @@ if __name__ == "__main__":
         sqrt = int(np.sqrt(p0.dim_X))
         img_shape = [sqrt, sqrt]
 
-    logger.info("Compiling function...")
 
-    #----------------------------------------------------------------------
-    # Compile functions
-
-    n_samples = tensor.iscalar('n_samples')
-    oversample = tensor.iscalar('n_samples')
-
-    samples, log_w = brick.sample(n_samples, oversample=oversample, n_inner=args.ninner)
-
-    if args.expected:
-        # Ok, take the second last and sample expected
-        x = brick.p_layers[0].sample_expected(samples[1])
+    if isinstance(brick, ReweightedWakeSleep):
+        sample_rws(brick, args)
+    elif isinstance(brick, (BiHM, GMM)):
+        sample_bihm(brick, args)
     else:
-        x = samples[0]
+        print("Unknown model type %s" % brick)
+        exit(1)
 
-    x = x.reshape([n_samples]+img_shape)
 
-    do_sample = theano.function(
-                        [n_samples, oversample], 
-                        [x, log_w],
-                        name="do_sample", allow_input_downcast=True)
-
-    #----------------------------------------------------------------------
-
-    n_samples = tensor.iscalar('n_samples')
-
-    samples, _, _ = brick.sample_p(n_samples)
-
-    if args.expected:
-        # Ok, take the second last and sample expected
-        x_p = brick.p_layers[0].sample_expected(samples[1])
-    else:
-        x_p = samples[0]
-
-    x_p = x_p.reshape([n_samples]+img_shape)
-
-    do_sample_p = theano.function(
-                        [n_samples], 
-                        x_p,
-                        name="do_sample_p", allow_input_downcast=True)
-
-    #----------------------------------------------------------------------
-    logger.info("Sample from model...")
-
-    n_layers = len(brick.p_layers)
-    n_samples = args.nsamples
-
-    x = [None] * n_samples
-    log_w = [None] * n_samples
-    progress = ProgressBar()
-    for n in progress(xrange(n_samples)):
-        x[n], log_w[n] = do_sample(1, args.oversample)
-     
-    x = np.concatenate(x)
-    img = img_grid(x, global_scale=True)
-
-    fname = os.path.splitext(args.experiment)[0]
-    fname += "-samples.png"
-
-    logger.info("Saving %s ..." % fname)
-    img.save(fname)
-
-    #----------------------------------------------------------------------
-    logger.info("Sample from p(x, h) ...")
-    
-    x_p = do_sample_p(n_samples)
-    img_p = img_grid(x_p, global_scale=True)
-
-    fname = os.path.splitext(args.experiment)[0]
-    fname += "-psamples.png"
-
-    logger.info("Saving %s ..." % fname)
-    img_p.save(fname)
-    
-
-    if args.show:
-        import pylab
-
-        pylab.figure()
-        pylab.gray()
-        pylab.axis('off')
-        pylab.imshow(img, interpolation='nearest')
-
-        pylab.figure()
-        pylab.gray()
-        pylab.axis('off')
-        pylab.imshow(img_p, interpolation='nearest')
- 
-        pylab.show(block=True)
