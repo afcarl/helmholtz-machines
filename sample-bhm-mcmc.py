@@ -128,31 +128,37 @@ def sample_conditional(h_upper, h_lower, p_upper, q_lower, oversample) :
     return h_proposals[idx,:]
 
 
-def sample_top_conditional(h_lower, p_top, q_lower):
+def sample_top_conditional(h_lower, p_top, q_lower, oversample):
     nsamples = 1
 
-    # First, get proposals
-    h_p, log_p = p_top.sample(nsamples)
-    log_p = logsumexp2(log_p, q_lower.log_prob(h_p, h_lower))
+    h_lower = replicate_batch(h_lower, oversample)
 
-    h_q, log_q = q_lower.sample(h_lower)
-    log_q = logsumexp2(log_q, p_top.log_prob(h_p))
-    
-    h_proposals = tensor.concatenate([h_p, h_q], axis=0)
-    log_proposals = tensor.concatenate([log_p, log_q], axis=0)  # - np.log(2.)
+    # First, get proposals
+    h1, log_1p = p_top.sample(oversample)
+    log_1q = q_lower.log_prob(h1, h_lower)
+
+    log_1ps = (log_1p + log_1q) / 2
+    log_1 = logsumexp2(log_1p, log_1q)
+
+    h2, log_2q = q_lower.sample(h_lower)
+    log_2p = p_top.log_prob(h2)
+
+    log_2ps = (log_2p + log_2q) / 2
+    log_2 = logsumexp2(log_2p, log_2q)
+
+    h_proposals = tensor.concatenate([h1, h2], axis=0)
+    log_proposals = tensor.concatenate([log_1, log_2], axis=0)  # - np.log(2.)
+    log_ps = tensor.concatenate([log_1ps, log_2ps], axis=0)
 
     # Calculate weights
-    log_p = p_top.log_prob(h_proposals)
-    log_q = q_lower.log_prob(h_proposals, h_lower)
-    ps = (log_p + log_q) / 2
-    log_w = ps - log_proposals
+    log_w = log_ps - log_proposals
     w_norm = logsumexp(log_w, axis=0)
     log_w = log_w-w_norm
     w = tensor.exp(log_w)
 
     idx = subsample(w, nsamples)
 
-    return h_proposals[idx, :]
+    return h_proposals[idx,:]
 
 
 def sample_bottom_conditional(h_upper, p_upper, ll_function, oversample, ninner):
@@ -259,6 +265,20 @@ if __name__ == "__main__":
                     name="conditional%d"%l, allow_input_downcast=True))
 
     #----------------------------------------------------------------------
+    h_lower = tensor.fmatrix('h_lower')
+
+    h = sample_top_conditional(
+            h_lower,  
+            brick.p_layers[-1],
+            brick.q_layers[-1],
+            oversample)
+
+    do_conditionals.append(
+            theano.function(
+                [h_lower, oversample], h,
+                name="top_conditional", allow_input_downcast=True))
+
+    #----------------------------------------------------------------------
 
     samples = [None] * n_layers
 
@@ -298,7 +318,8 @@ if __name__ == "__main__":
             for l in xrange(1, n_layers-1):
                 samples[l] = do_conditionals[l](samples[l-1], samples[l+1], oversample)
     
-            # XXX: do top level
+            # Top level
+            samples[-1] = do_conditionals[-1](samples[-2], oversample)
     
             # ...downwards...
             for l in reversed(xrange(1, n_layers-1)):
