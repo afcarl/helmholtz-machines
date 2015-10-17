@@ -112,7 +112,7 @@ class ReweightedWakeSleep(HelmholtzMachine):
 
     @application(inputs=['n_samples'], outputs=['samples', 'log_p', 'log_q'])
     def sample(self, n_samples):
-        return self.sample_p(n_amples)
+        return self.sample_p(n_samples)
 
     @application(inputs=['samples', 'log_p', 'log_q', 'n_samples'], outputs=['w'])
     def importance_weights(self, samples, log_p, log_q, n_samples):
