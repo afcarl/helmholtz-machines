@@ -94,22 +94,22 @@ def sample_rws(brick, args):
     x = x.reshape([n_samples]+img_shape)
 
     do_sample = theano.function(
-                        [n_samples, oversample], 
-                        [x, log_w],
+                        [n_samples], 
+                        x,
                         name="do_sample", allow_input_downcast=True)
 
     #----------------------------------------------------------------------
     #----------------------------------------------------------------------
     logger.info("Sample from p(x, h) ...")
     
-    x_p, h1 = do_sample_p(n_samples)
+    x_p = do_sample(args.nsamples)
     img = img_grid(x_p, global_scale=True)
 
     fname = os.path.splitext(args.experiment)[0]
     fname += "-psamples.png"
 
     logger.info("Saving %s ..." % fname)
-    img_p.save(fname)
+    img.save(fname)
     
     if args.show:
         import pylab
