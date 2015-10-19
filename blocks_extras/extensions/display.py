@@ -139,7 +139,7 @@ class ImageGetter(object):
 
     def __init__(self, image_shape, axes=(0, 1, 'c'),
                  shift=0, rescale=1, grid_shape=None):
-        self.image_shape = image_shape
+        self.image_shape = list(image_shape)
         self.axes = axes
         self.shift = shift
         self.rescale = rescale
@@ -157,9 +157,7 @@ class ImageGetter(object):
 
     def __call__(self):
         raw_data = self.get_image_data()
-
-        print raw_data.shape
-        image_tensor = raw_data.reshape([-1, 28, 28, 1])
+        image_tensor = raw_data.reshape([-1]+self.image_shape)
 
         #image_tensor = reshape_image(
         #    raw_data=raw_data,
