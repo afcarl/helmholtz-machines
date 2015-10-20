@@ -47,7 +47,7 @@ def get_streams(data_name, batch_size):
             MapFeatures(
             DataStream(
                 data,
-                iteration_scheme=SequentialScheme(data.num_examples, batch_size)
+                iteration_scheme=ShuffledScheme(data.num_examples, batch_size)
             ), 
             fn=map_fn),
             which_sources='features')
