@@ -20,7 +20,7 @@ class MapFeatures(SourcewiseTransformer):
         if source_name != 'features':
             raise
         if self.fn is None:
-            return batch
+            return source_batch
 
         return self.fn(source_batch)
 
@@ -52,8 +52,8 @@ def get_streams(data_name, batch_size):
             fn=map_fn),
             which_sources='features')
         for data, batch_size in ((data_train, batch_size),
-                                 (data_valid, batch_size//2),
-                                 (data_test, batch_size//2))
+                                 (data_valid, batch_size),
+                                 (data_test, batch_size))
     )
 
     return x_dim, train_stream, valid_stream, test_stream
