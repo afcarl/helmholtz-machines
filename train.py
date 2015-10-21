@@ -90,7 +90,7 @@ def main(args):
     lr_tag = float_tag(args.learning_rate)
     sizes_tag = args.layer_spec.replace(",", "-")
 
-    x_dim, data_train, data_valid, data_test = datasets.get_data(args.data)
+    x_dim, train_stream, valid_stream, test_stream = datasets.get_streams(args.data, args.batch_size)
 
     #------------------------------------------------------------
     # Setup model
@@ -281,24 +281,6 @@ def main(args):
 
     #------------------------------------------------------------
 
-    # Out usual train/valid/test data streams...
-    train_stream, valid_stream, test_stream = (
-            Flatten(DataStream(
-                data,
-                iteration_scheme=SequentialScheme(data.num_examples, batch_size)
-            ), which_sources='features')
-        for data, batch_size in ((data_train, args.batch_size),
-                                 (data_valid, args.batch_size//2),
-                                 (data_test, args.batch_size//2))
-    )
-
-    # A single datapooint per for detailed gradient monitoring...
-    gradient_stream = Flatten(
-        DataStream(
-            data_train,
-            iteration_scheme=ShuffledScheme(data_train.num_examples, args.batch_size)
-        ),
-        which_sources='features')
 
     # Live plotting?
     plotting_extensions = []

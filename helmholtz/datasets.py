@@ -1,11 +1,63 @@
 
 from __future__ import division
 
+from fuel.schemes import ShuffledScheme, SequentialScheme
+from fuel.streams import DataStream
+from fuel.transformers import Flatten, SourcewiseTransformer
 
 local_datasets = ["adult", "dna", "web", "nips", "mushrooms", "ocr_letters", "connect4", "rcv1"]
-supported_datasets = local_datasets + ['bmnist', 'bars', 'silhouettes']
+supported_datasets = local_datasets + ['mnist', 'bmnist', 'bars', 'silhouettes', 'tfd']
 
 # 'tfd' is missing but needs normalization 
+
+class MapFeatures(SourcewiseTransformer):
+    def __init__(self, data_stream, fn, **kwargs):
+        super(MapFeatures, self).__init__(data_stream, 
+            produces_examples=False, which_sources='features')
+        self.fn = fn
+
+    def transform_source_batch(self, source_batch, source_name):
+        if source_name != 'features':
+            raise
+        if self.fn is None:
+            return source_batch
+
+        return self.fn(source_batch)
+
+def map_mnist(batch):
+    return 1. * batch > 0.5
+
+def map_tfd(batch):
+    return batch / 255.
+
+
+def get_streams(data_name, batch_size):
+
+    if data_name == "mnist":
+        map_fn = map_mnist
+    elif data_name == "tfd":
+        map_fn = map_tfd
+    else:
+        map_fn = None
+
+    # Our usual train/valid/test data streams...
+    x_dim, data_train, data_valid, data_test = get_data(data_name)
+    train_stream, valid_stream, test_stream = (
+            Flatten(
+            MapFeatures(
+            DataStream(
+                data,
+                iteration_scheme=ShuffledScheme(data.num_examples, batch_size)
+            ), 
+            fn=map_fn),
+            which_sources='features')
+        for data, batch_size in ((data_train, batch_size),
+                                 (data_valid, batch_size),
+                                 (data_test, batch_size))
+    )
+
+    return x_dim, train_stream, valid_stream, test_stream
+
 
 def get_data(data_name):
     if data_name == 'bmnist':
@@ -16,6 +68,14 @@ def get_data(data_name):
         data_train = BinarizedMNIST(which_sets=['train'], sources=['features'])
         data_valid = BinarizedMNIST(which_sets=['valid'], sources=['features'])
         data_test  = BinarizedMNIST(which_sets=['test'], sources=['features'])
+    elif data_name == 'mnist':
+        from fuel.datasets.mnist import MNIST
+
+        x_dim = 28*28 
+
+        data_train = MNIST(which_sets=['train'], sources=['features'])
+        data_valid = MNIST(which_sets=['test'], sources=['features'])
+        data_test  = MNIST(which_sets=['test'], sources=['features'])
     elif data_name == 'silhouettes':
         from fuel.datasets.caltech101_silhouettes import CalTech101Silhouettes
 
