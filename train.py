@@ -269,6 +269,7 @@ def main(args):
         parameters=parameters,
         gradients=gradients,
         step_rule=CompositeRule([
+            StepClipping(25),
             step_rule,
             RemoveNotFinite(0.9),
         ])
