@@ -37,6 +37,7 @@ from blocks.extensions.stopping import FinishIfNoImprovementAfter
 from blocks.extensions.saveload import Checkpoint
 from blocks.extensions.training import SharedVariableModifier, TrackTheBest
 from blocks.extensions.monitoring import DataStreamMonitoring, TrainingDataMonitoring
+from blocks.extensions.predicates import OnLogRecord
 from blocks.filter import VariableFilter
 from blocks.graph import ComputationGraph
 from blocks.model import Model
@@ -264,14 +265,13 @@ def main(args):
 
     #parameters = cg.parameters[:4] + cg.parameters[5:]
     parameters = cg.parameters
-    print(parameters)
 
     algorithm = GradientDescent(
         cost=cost,
         parameters=parameters,
         gradients=gradients,
         step_rule=CompositeRule([
-            #StepClipping(25),
+            StepClipping(25),
             step_rule,
             RemoveNotFinite(0.9),
         ])
@@ -328,7 +328,7 @@ def main(args):
                         after_training=True,
                         every_n_epochs=10),
                     #SharedVariableModifier(
-                    #    algorithm.step_rule.components[0].learning_rate,
+                    #    step_rule.learning_rate,
                     #    half_lr_func,
                     #    before_training=False,
                     #    after_epoch=False,
@@ -336,6 +336,8 @@ def main(args):
                     #    every_n_epochs=half_lr),
                     TrackTheBest('valid_%s' % cost.name),
                     Checkpoint(name+".pkl", save_separately=['log', 'model']),
+                    #Checkpoint(name+"_best.pkl", save_separately=['model'])
+                    #    .add_condition(['after_epoch'], OnLogRecord('valid_%s_best_so_far' % cost.name)),
                     FinishIfNoImprovementAfter('valid_%s_best_so_far' % cost.name, epochs=args.patience),
                     FinishAfter(after_n_epochs=args.max_epochs),
                     Printing()] + plotting_extensions)
