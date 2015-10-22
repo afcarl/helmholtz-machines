@@ -31,7 +31,7 @@ def map_tfd(batch):
     return batch / 255.
 
 
-def get_streams(data_name, batch_size):
+def get_streams(data_name, batch_size, full_batch_size=False):
 
     if data_name == "mnist":
         map_fn = map_mnist
@@ -40,8 +40,18 @@ def get_streams(data_name, batch_size):
     else:
         map_fn = None
 
-    # Our usual train/valid/test data streams...
     x_dim, data_train, data_valid, data_test = get_data(data_name)
+
+    if full_batch_size:
+        train_bs = batch_size
+        valid_bs = data_valid.num_examples
+        test_bs = data_valid.num_examples
+    else:
+        train_bs = batch_size
+        valid_bs = batch_size
+        test_bs = batch_size
+
+    # Our usual train/valid/test data streams...
     train_stream, valid_stream, test_stream = (
             Flatten(
             MapFeatures(
@@ -51,9 +61,9 @@ def get_streams(data_name, batch_size):
             ), 
             fn=map_fn),
             which_sources='features')
-        for data, batch_size in ((data_train, batch_size),
-                                 (data_valid, batch_size),
-                                 (data_test, batch_size))
+        for data, batch_size in ((data_train, train_bs),
+                                 (data_valid, valid_bs),
+                                 (data_test, test_bs))
     )
 
     return x_dim, train_stream, valid_stream, test_stream

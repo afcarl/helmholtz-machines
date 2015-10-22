@@ -91,7 +91,7 @@ def main(args):
     lr_tag = float_tag(args.learning_rate)
     sizes_tag = args.layer_spec.replace(",", "-")
 
-    x_dim, train_stream, valid_stream, test_stream = datasets.get_streams(args.data, args.batch_size)
+    x_dim, train_stream, valid_stream, test_stream = datasets.get_streams(args.data, args.batch_size, True)
 
     #------------------------------------------------------------
     # Setup model
