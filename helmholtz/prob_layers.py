@@ -22,6 +22,8 @@ floatX = theano.config.floatX
 
 N_STREAMS = 2048
 
+logistic_clip = 12
+
 #-----------------------------------------------------------------------------
  
 def logsumexp(A, axis=None):
@@ -134,7 +136,7 @@ class BernoulliTopLayer(Initializable, ProbabilisticTopLayer):
 
     @application(inputs=[], outputs=['X_expected'])
     def sample_expected(self):
-        b = self.parameters[0]
+        b = self.parameters[0].clip(-logistic_clip, logistic_clip)
         return tensor.nnet.sigmoid(b)
 
     @application(outputs=['X', 'log_prob'])
@@ -164,7 +166,9 @@ class BernoulliLayer(Initializable, ProbabilisticLayer):
 
     @application(inputs=['Y'], outputs=['X_expected'])
     def sample_expected(self, Y):
-        return self.mlp.apply(Y)
+        sigm_plogistic_clip = tensor.nnet.sigmoid( logistic_clip)
+        sigm_mlogistic_clip = tensor.nnet.sigmoid(-logistic_clip)
+        return self.mlp.apply(Y).clip(sigm_mlogistic_clip, sigm_plogistic_clip)
 
     @application(inputs=['Y'], outputs=['X', 'log_prob'])
     def sample(self, Y):
