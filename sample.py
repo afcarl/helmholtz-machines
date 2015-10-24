@@ -35,7 +35,7 @@ logging.basicConfig(format=FORMAT, datefmt=DATEFMT, level=logging.INFO)
 def scale_norm(arr):
     arr = arr - arr.min()
     scale = (arr.max() - arr.min())
-    return scale * arr
+    return arr / scale
 
 def img_grid(arr, global_scale=True):
     N, height, width = arr.shape
