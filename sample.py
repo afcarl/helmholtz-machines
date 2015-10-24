@@ -21,10 +21,10 @@ from progressbar import ProgressBar
 
 from blocks.main_loop import MainLoop
 
+from helmholtz import replicate_batch, logsumexp
 from helmholtz.bihm import BiHM
 from helmholtz.gmm import GMM
 from helmholtz.rws import ReweightedWakeSleep
-from helmholtz.prob_layers import replicate_batch, logsumexp
 
 logger = logging.getLogger("sample.py")
 

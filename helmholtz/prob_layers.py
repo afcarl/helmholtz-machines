@@ -15,44 +15,14 @@ from blocks.bricks import Random, MLP, Initializable
 from blocks.utils import pack, shared_floatx_zeros
 from blocks.select import Selector
 
-from distributions import bernoulli
+from .distributions import bernoulli
 
 logger = logging.getLogger(__name__)
 floatX = theano.config.floatX
 
 N_STREAMS = 2048
 
-#-----------------------------------------------------------------------------
  
-def logsumexp(A, axis=None):
-    """Numerically stable log( sum( exp(A) ) ) """
-    A_max = tensor.max(A, axis=axis, keepdims=True)
-    B = tensor.log(tensor.sum(tensor.exp(A-A_max), axis=axis, keepdims=True))+A_max
-    B = tensor.sum(B, axis=axis)
-    return B
-
-
-def replicate_batch(A, repeat):
-    """Extend the given 2d Tensor by repeating reach line *repeat* times.
-
-    With A.shape == (rows, cols), this function will return an array with
-    shape (rows*repeat, cols).
-
-    Parameters
-    ----------
-    A : T.tensor
-        Each row of this 2d-Tensor will be replicated *repeat* times
-    repeat : int
-
-    Returns
-    -------
-    B : T.tensor
-    """
-    A_ = A.dimshuffle((0, 'x', 1))
-    A_ = A_ + tensor.zeros((A.shape[0], repeat, A.shape[1]), dtype=floatX)
-    A_ = A_.reshape( [A_.shape[0]*repeat, A.shape[1]] )
-    return A_
-
 #-----------------------------------------------------------------------------
 
 

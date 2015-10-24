@@ -21,15 +21,15 @@ from progressbar import ProgressBar
 from scipy import stats
 
 from blocks.main_loop import MainLoop
+#from blocks.monitoring.eavluators import 
 
 
 import helmholtz.datasets as datasets
 
-from helmholtz import flatten_values, unflatten_values
+from helmholtz import flatten_values, unflatten_values, replicate_batch, logsumexp
 from helmholtz.bihm import BiHM
 from helmholtz.gmm import GMM
 from helmholtz.rws import ReweightedWakeSleep
-from helmholtz.prob_layers import replicate_batch, logsumexp
 
 logger = logging.getLogger("sample.py")
 

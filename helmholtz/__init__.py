@@ -23,11 +23,40 @@ from blocks.select import Selector
 from blocks.roles import PARAMETER
 
 from initialization import RWSInitialization
-from prob_layers import replicate_batch, logsumexp
 from prob_layers import BernoulliTopLayer, BernoulliLayer
 
 logger = logging.getLogger(__name__)
 floatX = theano.config.floatX
+
+
+def logsumexp(A, axis=None):
+    """Numerically stable log( sum( exp(A) ) ) """
+    A_max = tensor.max(A, axis=axis, keepdims=True)
+    B = tensor.log(tensor.sum(tensor.exp(A-A_max), axis=axis, keepdims=True))+A_max
+    B = tensor.sum(B, axis=axis)
+    return B
+
+
+def replicate_batch(A, repeat):
+    """Extend the given 2d Tensor by repeating reach line *repeat* times.
+
+    With A.shape == (rows, cols), this function will return an array with
+    shape (rows*repeat, cols).
+
+    Parameters
+    ----------
+    A : T.tensor
+        Each row of this 2d-Tensor will be replicated *repeat* times
+    repeat : int
+
+    Returns
+    -------
+    B : T.tensor
+    """
+    A_ = A.dimshuffle((0, 'x', 1))
+    A_ = A_ + tensor.zeros((A.shape[0], repeat, A.shape[1]), dtype=floatX)
+    A_ = A_.reshape( [A_.shape[0]*repeat, A.shape[1]] )
+    return A_
 
 
 def flatten_values(vals, size):

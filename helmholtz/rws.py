@@ -15,9 +15,8 @@ from collections import OrderedDict
 from blocks.bricks.base import application, Brick, lazy
 from blocks.select import Selector
 
-from helmholtz import HelmholtzMachine
-from helmholtz import flatten_values, unflatten_values, merge_gradients
-from prob_layers import replicate_batch, logsumexp
+from . import HelmholtzMachine
+from . import flatten_values, unflatten_values, merge_gradients, replicate_batch, logsumexp
 
 logger = logging.getLogger(__name__)
 floatX = theano.config.floatX

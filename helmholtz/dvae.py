@@ -13,11 +13,10 @@ from blocks.bricks.base import application, Brick, lazy
 from blocks.bricks import Random, Initializable, MLP, Logistic
 from blocks.initialization import Uniform, IsotropicGaussian, Constant, Sparse, Identity
 
-from batch_normalization import BatchNormalization, BatchNormalizedMLP
-from helmholtz import HelmholtzMachine
-from initialization import RWSInitialization
-from prob_layers import replicate_batch, logsumexp
-from prob_layers import BernoulliLayer, BernoulliTopLayer
+from . import HelmholtzMachine, replicate_batch, logsumexp
+from .batch_normalization import BatchNormalization, BatchNormalizedMLP
+from .initialization import RWSInitialization
+from .prob_layers import BernoulliLayer, BernoulliTopLayer
 
 logger = logging.getLogger(__name__)
 floatX = theano.config.floatX

@@ -16,9 +16,8 @@ from blocks.bricks.base import application, Brick, lazy
 from blocks.initialization import Uniform, IsotropicGaussian, Constant, Sparse, Identity
 from blocks.select import Selector
 
-from helmholtz import HelmholtzMachine
-from helmholtz import merge_gradients, flatten_values, unflatten_values
-from prob_layers import replicate_batch, logsumexp
+from . import HelmholtzMachine
+from . import merge_gradients, flatten_values, unflatten_values, replicate_batch, logsumexp
 
 logger = logging.getLogger(__name__)
 floatX = theano.config.floatX
