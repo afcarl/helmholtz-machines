@@ -37,6 +37,22 @@ FORMAT = '[%(asctime)s] %(name)-15s %(message)s'
 DATEFMT = "%H:%M:%S"
 logging.basicConfig(format=FORMAT, datefmt=DATEFMT, level=logging.INFO)
 
+
+#-----------------------------------------------------------------------------
+
+class StreamEvaluator:
+    def __init__(self, variables):
+        pass
+
+    def _compile(self):
+        pass
+
+    def evaluate_batch(self, data_batch):
+        pass
+
+    def evaluate(self, stream):
+        pass
+
 #-----------------------------------------------------------------------------
 
 if __name__ == "__main__":
