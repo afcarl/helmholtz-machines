@@ -28,6 +28,8 @@ from helmholtz import replicate_batch, logsumexp
 from helmholtz.bihm import BiHM
 from helmholtz.rws import ReweightedWakeSleep
 
+from sample import img_grid
+
 logger = logging.getLogger("sample.py")
 
 FORMAT = '[%(asctime)s] %(name)-15s %(message)s'
@@ -36,47 +38,7 @@ logging.basicConfig(format=FORMAT, datefmt=DATEFMT, level=logging.INFO)
 
 theano_rng = RandomStreams(seed=234)
 
-
-def scale_norm(arr):
-    arr = arr - arr.min()
-    scale = (arr.max() - arr.min())
-    return scale * arr
-
-def img_grid(arr, global_scale=True):
-    N, height, width = arr.shape
-
-    rows = int(np.sqrt(N))
-    cols = int(np.sqrt(N))
-
-    if rows*cols < N:
-        cols = cols + 1
-
-    if rows*cols < N:
-        rows = rows + 1
-
-    total_height = rows * (height+1)
-    total_width  = cols * (width+1)
-
-    if global_scale:
-        arr = scale_norm(arr)
-
-    I = np.zeros((total_height, total_width))
-
-    for i in xrange(N):
-        r = i // cols
-        c = i % cols
-
-        if global_scale:
-            this = arr[i]
-        else:
-            this = scale_norm(arr[i])
-
-        offset_y, offset_x = r*(height+1), c*(width+1)
-        I[offset_y:(offset_y+height), offset_x:(offset_x+width)] = this
-    
-    I = (255*I).astype(np.uint8)
-    return Image.fromarray(I)
-
+#-----------------------------------------------------------------------------
 
 def logsumexp2(a, b):
     """ Compute a numerically stable log(exp(a)+exp(b)) """
@@ -91,7 +53,6 @@ def subsample(weights, n_samples):
     return idx
 
 #-----------------------------------------------------------------------------
-
 
 def sample_conditional(h_upper, h_lower, p_upper, q_lower, oversample) :
     """ return (h, log_ps) """

@@ -33,6 +33,7 @@ DATEFMT = "%H:%M:%S"
 logging.basicConfig(format=FORMAT, datefmt=DATEFMT, level=logging.INFO)
 
 def scale_norm(arr):
+    """ Scale and shoft the given array to be 0..1 """
     arr = arr - arr.min()
     scale = (arr.max() - arr.min())
     return arr / scale
