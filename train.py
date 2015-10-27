@@ -156,6 +156,7 @@ def main(args):
         model = BiHM(
                 p_layers,
                 q_layers,
+                baseline=args.qbaseline
             )
     else:
         raise ValueError("Unknown training method '%s'" % args.method)
@@ -399,6 +400,8 @@ if __name__ == "__main__":
                 help="Bidirectional Helmholtz Machine with RWS")
     subparser.add_argument("--nsamples", "-s", type=int, dest="n_samples",
                 default=10, help="Number of IS samples")
+    subparser.add_argument("--qbaseline", choices=['none', 'datapoint', 'batch'], 
+                default='none', help="Use a baseline for Q updates")
     subparser.add_argument("--deterministic-layers", type=int, dest="deterministic_layers",
                 default=0, help="Deterministic hidden layers per stochastic layer")
     subparser.add_argument("layer_spec", type=str,

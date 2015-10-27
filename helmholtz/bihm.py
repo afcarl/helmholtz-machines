@@ -27,9 +27,13 @@ floatX = theano.config.floatX
 
 
 class BiHM(HelmholtzMachine):
-    def __init__(self, p_layers, q_layers, zreg=0.0, transpose_init=False, **kwargs):
+    def __init__(self, p_layers, q_layers, zreg=0.0, transpose_init=False, 
+                    baseline='batch', **kwargs):
         super(BiHM, self).__init__(p_layers, q_layers, **kwargs)
 
+        assert baseline in (None, 'none', 'datapoint', 'batch')
+
+        self.baseline = baseline
         self.transpose_init = transpose_init
         self.zreg = zreg
 
@@ -213,14 +217,24 @@ class BiHM(HelmholtzMachine):
 
         # Approximate log p(x) and calculate IS weights
         w = self.importance_weights(samples, log_p, log_q)
-        w = w.reshape( (batch_size*n_samples, ) )
+
+        if self.baseline == 'datapoint':
+            wq = w - tensor.shape_padright(tensor.mean(w, axis=1))
+        elif self.baseline == 'batch':
+            wq = w - tensor.mean(w)
+        else:
+            wq = w
+
+        wp = w.reshape( (batch_size*n_samples, ) )
+        wq = wq.reshape( (batch_size*n_samples, ) )
+
         samples = flatten_values(samples, batch_size*n_samples)
 
         gradients = OrderedDict()
         for l in xrange(n_layers-1):
-            gradients = merge_gradients(gradients, p_layers[l].get_gradients(samples[l], samples[l+1], weights=w))
-            gradients = merge_gradients(gradients, q_layers[l].get_gradients(samples[l+1], samples[l], weights=w))
-        gradients = merge_gradients(gradients, p_layers[-1].get_gradients(samples[-1], weights=w))
+            gradients = merge_gradients(gradients, p_layers[l].get_gradients(samples[l], samples[l+1], weights=wp))
+            gradients = merge_gradients(gradients, q_layers[l].get_gradients(samples[l+1], samples[l], weights=wq))
+        gradients = merge_gradients(gradients, p_layers[-1].get_gradients(samples[-1], weights=wp))
 
 
         if self.zreg > 0.0:
@@ -253,29 +267,3 @@ class BiHM(HelmholtzMachine):
  
 
         return log_px, log_psx, gradients
-
-        """
-        if True:
-            cost = 0
-            for l in xrange(n_layers-1):
-                cost = cost - (w * p_layers[l].log_prob(samples[l], samples[l+1])).mean()
-                cost = cost - (w * q_layers[l].log_prob(samples[l+1], samples[l])).mean()
-            cost = cost - (w * p_layers[-1].log_prob(samples[-1])).mean()
-
-            gradients = OrderedDict()
-            for l in xrange(n_layers-1):
-                for pname, param in Selector(p_layers[l]).get_params().iteritems():
-                    gradients[param] = tensor.grad(cost, param)
-                for pname, param in Selector(q_layers[l]).get_params().iteritems():
-                    gradients[param] = tensor.grad(cost, param)
-            for pname, param in Selector(p_layers[-1]).get_params().iteritems():
-                gradients[param] = tensor.grad(cost, param)
-        else:
-            pass
-        return log_psx, log_px, gradients
-        """
-
- 
-
-        """
-       """
