@@ -46,12 +46,14 @@ if __name__ == "__main__":
     parser = ArgumentParser("Estimate the effective sample size")
     parser.add_argument("--data", "-d", dest='data', choices=datasets.supported_datasets,
                 default='bmnist', help="Dataset to use")
-    parser.add_argument("--nsamples", "--samples", "-s", type=int, 
-            default=100, help="no. of samples to draw")
+    parser.add_argument("--max-batch", type=int, 
+            default="10000", help="Maximum internal batch size (default: 10000)")
+    parser.add_argument("--nsamples", "--samples", "-s", type=str, 
+            default="1,10,100,1000,10000", help="Comma seperated list of #samples")
+    parser.add_argument("--no-z-est", "-noz", action="store_true", default=False,
+            help="Do not estimate log Z for BiHM models")
     parser.add_argument("--zsamples", type=int, default=1000000,
             help="Estimate Z using this number of samples")
-    parser.add_argument("--est-z", "-z", action="store_true", default=False,
-            help="Estimate log Z and print estimated p* nll")
     parser.add_argument("experiment", help="Experiment to load")
     args = parser.parse_args()
 
@@ -69,8 +71,9 @@ if __name__ == "__main__":
     assert isinstance(brick, (ReweightedWakeSleep, GMM, BiHM))
 
     #----------------------------------------------------------------------
-    if args.est_z:
-        logger.info("Estimating Z...")
+    estimate_z = not args.no_z_est and isinstance(brick, (BiHM, GMM))
+    if estimate_z:
+        logger.info("Estimating log z...")
 
         # compile theano function
         bs = tensor.iscalar('bs')
@@ -83,20 +86,17 @@ if __name__ == "__main__":
 
         #-------------------------------------------------------
 
-        batch_size = 10000
-
         seq = []
-        for _ in xrange(0, args.zsamples, batch_size):
-            seq.append(float(do_z(batch_size)))
+        for _ in xrange(0, args.zsamples, args.max_batch):
+            seq.append(float(do_z(args.max_batch)))
         
         log_z2 = logsumexp(seq) - np.log(args.zsamples)
                 
-        print("2 log Z ~= %5.3f" % log_z2)
+        logger.info("2 log z ~= %5.3f" % log_z2)
 
     #----------------------------------------------------------------------
     logger.info("Compiling function...")
 
-    batch_size = 1
     n_samples = tensor.iscalar('n_samples')
     x = tensor.matrix('features')
 
@@ -115,20 +115,19 @@ if __name__ == "__main__":
 
     x_dim, data_train, data_valid, data_test = datasets.get_data(args.data)
 
-    batch_size = 1
     num_examples = data_test.num_examples
-    stream = Flatten(DataStream(
-                        data_test,
-                        iteration_scheme=ShuffledScheme(num_examples, batch_size)
-                    ), which_sources='features')
-
-    #n_samples = (1, 10, 100, 1000, 10000)
-    n_samples = (1000,)
+    n_samples = (int(s) for s in args.nsamples.split(","))
 
     dict_p = {}
     dict_ps = {}
     
     for K in n_samples:
+        batch_size = max(args.max_batch // K, 1)
+        stream = Flatten(DataStream(
+                        data_test,
+                        iteration_scheme=ShuffledScheme(num_examples, batch_size)
+                    ), which_sources='features')
+
         log_p = np.asarray([])
         log_ps = np.asarray([])
         for batch in stream.get_epoch_iterator(as_dict=True):
@@ -145,10 +144,9 @@ if __name__ == "__main__":
         dict_p[K] = log_p
         dict_ps[K] = log_ps
     
-        if args.est_z:
-            print("log p  /  p~  /  p*:  %5.2f+-%4.2f  /  %5.2f+-%4.2f  /  %5.2f" % (log_p, log_p_, log_ps, log_ps_, log_ps-log_z2))
+        if estimate_z:
+            print("log p / log p~ / log p* [%6d spls]:  %5.2f+-%4.2f  /  %5.2f+-%4.2f  /  %5.2f" % 
+                (K, log_p, log_p_, log_ps, log_ps_, log_ps-log_z2))
         else:
-            print("log p  /  p~:  %5.2f+-%4.2f  /  %5.2f+-%4.2f" % (log_p, log_p_, log_ps, log_ps_))
-
-    print(dict_p)
-    print(dict_ps)
+            print("log p / log p~ [%ds spls]:  %5.2f+-%4.2f  /  %5.2f+-%4.2f" %
+                (K, log_p, log_p_, log_ps, log_ps_))
