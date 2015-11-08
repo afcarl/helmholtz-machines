@@ -182,8 +182,7 @@ def main(args):
 
         assert isinstance(model, (BiHM, ReweightedWakeSleep, DVAE, VAE))
 
-        fname = basename(args.model_file)
-        mname = fname.rpartition("_model.pkl")
+        mname, _, _ = basename(args.model_file).rpartition("_model.pkl")
         name = "%s-cont-%s-lr%s-spl%s" % (mname, args.name, lr_tag, args.n_samples)
     else:
         raise ValueError("Unknown training method '%s'" % args.method)
