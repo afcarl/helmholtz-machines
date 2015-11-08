@@ -27,13 +27,9 @@ floatX = theano.config.floatX
 
 
 class BiHM(HelmholtzMachine):
-    def __init__(self, p_layers, q_layers, zreg=0.0, transpose_init=False, 
-                    baseline='batch', **kwargs):
+    def __init__(self, p_layers, q_layers, zreg=0.0, transpose_init=False, **kwargs):
         super(BiHM, self).__init__(p_layers, q_layers, **kwargs)
 
-        assert baseline in (None, 'none', 'datapoint', 'batch')
-
-        self.baseline = baseline
         self.transpose_init = transpose_init
         self.zreg = zreg
 
@@ -63,7 +59,7 @@ class BiHM(HelmholtzMachine):
 
         return log_q
 
-    #@application(inputs=['n_samples'], outputs=['samples', 
+    #@application(inputs=['n_samples'], outputs=['samples', 'log_p', 'log_q'])
     def sample_p(self, n_samples):
         """
         """
@@ -140,10 +136,6 @@ class BiHM(HelmholtzMachine):
         return subsamples, log_w
 
     def importance_weights(self, samples, log_p, log_q):
-        p_layers = self.p_layers
-        q_layers = self.q_layers
-        n_layers = len(p_layers)
-
         # Sum all layers
         log_p_all = sum(log_p)   # This is the python sum over a list
         log_q_all = sum(log_q)   # This is the python sum over a list
@@ -159,10 +151,6 @@ class BiHM(HelmholtzMachine):
 
     @application(inputs=['features', 'n_samples'], outputs=['log_px', 'log_psx'])
     def log_likelihood(self, features, n_samples):
-        p_layers = self.p_layers
-        q_layers = self.q_layers
-        n_layers = len(p_layers)
-
         batch_size = features.shape[0]
 
         x = replicate_batch(features, n_samples)
@@ -218,15 +206,9 @@ class BiHM(HelmholtzMachine):
         # Approximate log p(x) and calculate IS weights
         w = self.importance_weights(samples, log_p, log_q)
 
-        if self.baseline == 'datapoint':
-            wq = w - tensor.shape_padright(tensor.mean(w, axis=1))
-        elif self.baseline == 'batch':
-            wq = w - tensor.mean(w)
-        else:
-            wq = w
-
         wp = w.reshape( (batch_size*n_samples, ) )
-        wq = wq.reshape( (batch_size*n_samples, ) )
+        wq = w.reshape( (batch_size*n_samples, ) )
+        wq = wq - (1./n_samples)
 
         samples = flatten_values(samples, batch_size*n_samples)
 
@@ -235,7 +217,6 @@ class BiHM(HelmholtzMachine):
             gradients = merge_gradients(gradients, p_layers[l].get_gradients(samples[l], samples[l+1], weights=wp))
             gradients = merge_gradients(gradients, q_layers[l].get_gradients(samples[l+1], samples[l], weights=wq))
         gradients = merge_gradients(gradients, p_layers[-1].get_gradients(samples[-1], weights=wp))
-
 
         if self.zreg > 0.0:
             #zreg = batch_size * numpy.float32(self.zreg)
@@ -267,7 +248,13 @@ class BiHM(HelmholtzMachine):
 
         return log_px, log_psx, gradients
 
+
     def estimate_log_z2(self, n_samples):
+        """ Compute an estimate for 2log(z).
+
+        Returns log(sum(sqrt( q(x|h)p(x,h') / (p(x,h)/q(h'|x)))))
+            with x, h ~ p(x,h); h' ~ q(h|x)
+        """
         samples, log_pp, log_pq = self.sample_p(n_samples)
         _, log_qp, log_qq = self.sample_q(samples[0])
 
