@@ -264,6 +264,19 @@ class BiHM(HelmholtzMachine):
                 gradients = merge_gradients(gradients,
                             q_layers[l].get_gradients(samples[l+1], samples[l], weights=w),
                             scale=zreg)
- 
 
         return log_px, log_psx, gradients
+
+    def estimate_log_z2(self, n_samples):
+        samples, log_pp, log_pq = self.sample_p(n_samples)
+        _, log_qp, log_qq = self.sample_q(samples[0])
+
+        log_pp = sum(log_pp)
+        log_pq = sum(log_pq)
+        log_qp = sum(log_qp)
+        log_qq = sum(log_qq)
+
+        log_z2 = 1/2.*(log_pq-log_pp+log_qp-log_qq)
+        log_z2 = logsumexp(log_z2)
+        
+        return log_z2

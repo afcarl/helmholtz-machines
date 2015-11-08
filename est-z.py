@@ -19,14 +19,14 @@ from PIL import Image
 from argparse import ArgumentParser
 from progressbar import ProgressBar
 from scipy import stats
-from scipy.misc import logsumexp
 
 from blocks.main_loop import MainLoop
 
+import scipy.misc as misc
 
 import helmholtz.datasets as datasets
 
-from helmholtz import flatten_values, unflatten_values
+from helmholtz import logsumexp
 from helmholtz.bihm import BiHM
 from helmholtz.gmm import GMM
 from helmholtz.rws import ReweightedWakeSleep
@@ -37,6 +37,7 @@ FORMAT = '[%(asctime)s] %(name)-15s %(message)s'
 DATEFMT = "%H:%M:%S"
 logging.basicConfig(format=FORMAT, datefmt=DATEFMT, level=logging.INFO)
 
+
 #-----------------------------------------------------------------------------
 
 if __name__ == "__main__":
@@ -44,9 +45,11 @@ if __name__ == "__main__":
     parser.add_argument("--data", "-d", dest='data', choices=datasets.supported_datasets,
                 default='bmnist', help="Dataset to use")
     parser.add_argument("--nsamples", "--samples", "-s", type=int, 
-            default=100000, help="no. of samples to draw")
+            default=1000000, help="no. of samples to draw")
     parser.add_argument("--ninner", type=int, 
-            default=1000, help="no. of samples to draw")
+            default=10, help="no. of samples to draw")
+    parser.add_argument("--batch-size", "-bs", type=int, 
+            default=10000, help="no. of samples to draw")
     parser.add_argument("experiment", help="Experiment to load")
     args = parser.parse_args()
 
@@ -61,8 +64,11 @@ if __name__ == "__main__":
     while len(brick.parents) > 0:
         brick = brick.parents[0]
 
-    #assert isinstance(brick, (ReweightedWakeSleep, BiHM, GMM))
-    assert isinstance(brick, (BiHM, GMM))
+    assert isinstance(brick, (ReweightedWakeSleep, BiHM, GMM))
+
+    np.random.seed();
+    for layer in brick.p_layers:
+        layer.theano_rng.seed(np.random.randint(500))
 
     #----------------------------------------------------------------------
     logger.info("Compiling function...")
@@ -71,46 +77,53 @@ if __name__ == "__main__":
 
     batch_size = 1
     n_samples = tensor.iscalar('n_samples')
+    n_inner = tensor.iscalar('n_inner')
     #x = tensor.matrix('features')
     #x_ = replicate_batch(x, n_samples)
 
-    samples, log_p, log_q = brick.sample_p(1)
-    log_px, log_psx = brick.log_likelihood(samples[0], n_samples)
+    samples, log_p, log_q = brick.sample_p(n_samples)
+    log_px, log_psx = brick.log_likelihood(samples[0], n_inner)
 
     log_p = sum(log_p)
     log_q = sum(log_q)
 
-    log_pxp  = log_px - log_p
-    log_psxp = 1/2.*log_psx + 1/2.*(log_q-log_p)
+    log_psxp  = 1/2.*log_psx + 1/2.*(log_q-log_p)
+    log_psxp2 = 2 * log_psxp
+
+    log_psxp  = logsumexp(log_psxp)
+    log_psxp2 = logsumexp(log_psxp2)
 
     do_z = theano.function(
-                        [n_samples], 
-                        [log_pxp, log_psxp],
+                        [n_samples, n_inner], 
+                        [log_psxp, log_psxp2],
                         name="do_z", allow_input_downcast=True)
 
     #----------------------------------------------------------------------
     logger.info("Computing Z...")
 
-    np.random.seed(); dummy = np.random.randint(50)
-    for _ in xrange(dummy):
-        _, _ = do_z(args.ninner)
+    batch_size = args.batch_size // args.ninner
 
-    log_pxp = []
-    log_psxp = []
-    for k in xrange(args.nsamples):
-        pxp, psxp = do_z(args.ninner)
+    n_samples = []
+    log_psxp  = []
+    log_psxp2 = []
+    for k in xrange(0, args.nsamples, batch_size):
+        psxp, psxp2 = do_z(batch_size, args.ninner)
+        psxp, psxp2 = float(psxp), float(psxp2)
 
-        pxp = float(pxp)
-        psxp = float(psxp)
-
-        log_pxp.append(pxp)
+        n_samples.append(k)
         log_psxp.append(psxp)
+        log_psxp2.append(psxp2)
 
-        if k % 10 == 0:
-            z_est = (logsumexp(log_psxp)-np.log(k+1))/2.
-        
-            print("[%d samples] Z (p*) estimate: %s" % (k, z_est))
+        if k % 10000 == 0:
+            sum_psxp = misc.logsumexp(log_psxp)
+            sum_psxp2 = misc.logsumexp(log_psxp2)
+
+            z_est = (sum_psxp - np.log(k)) / 2
+            sd = np.sqrt(k*np.exp(sum_psxp)-np.exp(sum_psxp2)) / k
+            se = 2*sd / np.sqrt(k)
+
+            print("[%d samples] Z (p*) estimate: %7.5f +- %7.5f" % (k, z_est, se))
 
     import pandas as pd
-    df = pd.DataFrame({'items': log_psxp})
-    df.save("est-Z-inner%d-spl%d.pkl" % (args.ninner, args.nsamples))
+    df = pd.DataFrame({'k': n_samples, 'log_psxp': log_psxp, 'log_psxp2': log_psxp2})
+    df.save("est-Z-inner%d.pkl" % (args.ninner))
