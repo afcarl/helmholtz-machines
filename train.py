@@ -88,7 +88,6 @@ def vae_training():
 def main(args):
     """Run experiment. """
     lr_tag = float_tag(args.learning_rate)
-    sizes_tag = args.layer_spec.replace(",", "-")
 
     x_dim, train_stream, valid_stream, test_stream = datasets.get_streams(args.data, args.batch_size)
 
@@ -98,6 +97,7 @@ def main(args):
     deterministic_size = 1.
 
     if args.method == 'vae':
+        sizes_tag = args.layer_spec.replace(",", "-")
         layer_sizes = [int(i) for i in args.layer_spec.split(",")]
         layer_sizes, z_dim = layer_sizes[:-1], layer_sizes[-1]
 
@@ -114,7 +114,9 @@ def main(args):
             raise "Unknown hidden nonlinearity %s" % args.hidden_act
 
         model = VAE(x_dim=x_dim, hidden_layers=layer_sizes, hidden_act=hidden_act, z_dim=z_dim)
+        model.initialize()
     elif args.method == 'dvae':
+        sizes_tag = args.layer_spec.replace(",", "-")
         layer_sizes = [int(i) for i in args.layer_spec.split(",")]
         layer_sizes, z_dim = layer_sizes[:-1], layer_sizes[-1]
 
@@ -131,7 +133,9 @@ def main(args):
             raise "Unknown hidden nonlinearity %s" % args.hidden_act
 
         model = DVAE(x_dim=x_dim, hidden_layers=layer_sizes, hidden_act=hidden_act, z_dim=z_dim)
+        model.initialize()
     elif args.method == 'rws':
+        sizes_tag = args.layer_spec.replace(",", "-")
         name = "%s-%s-%s-lr%s-dl%d-spl%d-%s" % \
             (args.data, args.method, args.name, lr_tag, args.deterministic_layers, args.n_samples, sizes_tag)
 
@@ -144,7 +148,9 @@ def main(args):
                 p_layers,
                 q_layers,
             )
+        model.initialize()
     elif args.method == 'bihm-rws':
+        sizes_tag = args.layer_spec.replace(",", "-")
         name = "%s-%s-%s-lr%s-dl%d-spl%d-%s" % \
             (args.data, args.method, args.name, lr_tag, args.deterministic_layers, args.n_samples, sizes_tag)
 
@@ -158,10 +164,29 @@ def main(args):
                 q_layers,
                 baseline=args.qbaseline
             )
+        model.initialize()
+    elif args.method == 'continue':
+        import cPickle as pickle
+        from os.path import basename, splitext
+
+
+        with open(args.model_file, 'rb') as f:
+            m = pickle.load(f)
+
+        if isinstance(m, MainLoop):
+            m = m.model
+
+        model = m.get_top_bricks()[0]
+        while len(model.parents) > 0:
+            model = model.parents[0]
+
+        assert isinstance(model, (BiHM, ReweightedWakeSleep, DVAE, VAE))
+
+        fname = basename(args.model_file)
+        mname = fname.rpartition("_model.pkl")
+        name = "%s-cont-%s-lr%s-spl%s" % (mname, args.name, lr_tag, args.n_samples)
     else:
         raise ValueError("Unknown training method '%s'" % args.method)
-
-    model.initialize()
 
     #------------------------------------------------------------
 
@@ -364,6 +389,13 @@ if __name__ == "__main__":
                 default=10, help="Number of epochs without improvement (default: 10)")
     subparsers = parser.add_subparsers(title="methods", dest="method")
 
+    # Continue
+    subparser = subparsers.add_parser("continue",
+                help="Variational Auto Encoder with Gaussian latents and Bernoulli observed")
+    subparser.add_argument("model_file", type=str, 
+                help="Model .pkl lto load and continue")
+    subparser.add_argument("--nsamples", "-s", type=int, dest="n_samples",
+                default=10, help="Number of samples")
 
     # Variational Autoencoder
     subparser = subparsers.add_parser("vae",
