@@ -14,6 +14,7 @@ from collections import OrderedDict
 
 from blocks.bricks.base import application, Brick, lazy
 from blocks.initialization import Uniform, IsotropicGaussian, Constant, Sparse, Identity
+from blocks.roles import has_roles, WEIGHT
 from blocks.select import Selector
 
 from . import HelmholtzMachine
@@ -27,11 +28,13 @@ floatX = theano.config.floatX
 
 
 class BiHM(HelmholtzMachine):
-    def __init__(self, p_layers, q_layers, zreg=0.0, transpose_init=False, **kwargs):
+    def __init__(self, p_layers, q_layers, l1reg=0.0, l2reg=0.0, transpose_init=False, **kwargs):
         super(BiHM, self).__init__(p_layers, q_layers, **kwargs)
 
         self.transpose_init = transpose_init
-        self.zreg = zreg
+        self.l1reg = l1reg
+        self.l2reg = l2reg
+        self.zreg = 0.0
 
         self.children = p_layers + q_layers
 
@@ -217,6 +220,16 @@ class BiHM(HelmholtzMachine):
             gradients = merge_gradients(gradients, p_layers[l].get_gradients(samples[l], samples[l+1], weights=wp))
             gradients = merge_gradients(gradients, q_layers[l].get_gradients(samples[l+1], samples[l], weights=wq))
         gradients = merge_gradients(gradients, p_layers[-1].get_gradients(samples[-1], weights=wp))
+
+        if (self.l1reg > 0.) or (self.l2reg > 0.):
+            reg_gradients = OrderedDict()
+            params = Selector(self).get_parameters()
+            for pname, param in params.iteritems():
+                if has_roles(param, (WEIGHT,)):
+                    logger.warning("Adding regularizer for %s" % pname)
+                    reg_cost = self.l1reg * tensor.sum(abs(param)) + self.l2reg * tensor.sum(param**2)
+                    reg_gradients[param] = tensor.grad(reg_cost, param)
+            gradients = merge_gradients(gradients, reg_gradients)
 
         if self.zreg > 0.0:
             #zreg = batch_size * numpy.float32(self.zreg)

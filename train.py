@@ -162,6 +162,8 @@ def main(args):
         model = BiHM(
                 p_layers,
                 q_layers,
+                l1reg=args.l1reg,
+                l2reg=args.l2reg,
             )
         model.initialize()
     elif args.method == 'continue':
@@ -430,6 +432,10 @@ if __name__ == "__main__":
                 help="Bidirectional Helmholtz Machine with RWS")
     subparser.add_argument("--nsamples", "-s", type=int, dest="n_samples",
                 default=10, help="Number of IS samples")
+    subparser.add_argument("--l1reg", type=float, dest="l1reg",
+                default=0.0, help="L1 regularization for weight matrices")
+    subparser.add_argument("--l2reg", type=float, dest="l2reg",
+                default=0.0, help="L2 regularization for weight matrices")
     subparser.add_argument("--deterministic-layers", type=int, dest="deterministic_layers",
                 default=0, help="Deterministic hidden layers per stochastic layer")
     subparser.add_argument("layer_spec", type=str,
