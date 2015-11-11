@@ -226,7 +226,6 @@ class BiHM(HelmholtzMachine):
             params = Selector(self).get_parameters()
             for pname, param in params.iteritems():
                 if has_roles(param, (WEIGHT,)):
-                    logger.warning("Adding regularizer for %s" % pname)
                     reg_cost = self.l1reg * tensor.sum(abs(param)) + self.l2reg * tensor.sum(param**2)
                     reg_gradients[param] = tensor.grad(reg_cost, param)
             gradients = merge_gradients(gradients, reg_gradients)
