@@ -1,6 +1,8 @@
 
 from __future__ import division
 
+import numpy as np
+
 from fuel.schemes import ShuffledScheme, SequentialScheme
 from fuel.streams import DataStream
 from fuel.transformers import Flatten, SourcewiseTransformer
@@ -28,7 +30,7 @@ def map_mnist(batch):
     return 1. * batch > 0.5
 
 def map_tfd(batch):
-    return batch / 255.
+    return np.cast[np.float32](batch / 255.)
 
 
 def get_streams(data_name, batch_size):
