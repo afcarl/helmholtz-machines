@@ -91,7 +91,7 @@ if __name__ == "__main__":
     ess_p = n_samples * (wp_**2 / wp2_)
 
     # Importance weights for q proposal for p*
-    wps = brick.importance_weights(samples, log_p, log_q, n_samples)
+    wps = brick.importance_weights(log_p, log_q)
 
     wps_ = tensor.mean(wps)
     wps2_ = tensor.mean(wps**2)
