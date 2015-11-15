@@ -288,7 +288,6 @@ def main(args):
 
     #parameters = cg.parameters[:4] + cg.parameters[5:]
     parameters = cg.parameters
-    print(parameters)
 
     algorithm = GradientDescent(
         cost=cost,
