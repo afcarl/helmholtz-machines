@@ -30,6 +30,7 @@ from helmholtz import flatten_values, unflatten_values, replicate_batch, logsume
 from helmholtz.bihm import BiHM
 from helmholtz.gmm import GMM
 from helmholtz.rws import ReweightedWakeSleep
+from helmholtz.vae import VAE
 
 logger = logging.getLogger("sample.py")
 
@@ -59,7 +60,7 @@ if __name__ == "__main__":
     while len(brick.parents) > 0:
         brick = brick.parents[0]
 
-    assert isinstance(brick, (ReweightedWakeSleep, BiHM, GMM))
+    assert isinstance(brick, (ReweightedWakeSleep, BiHM, GMM, VAE))
 
     #----------------------------------------------------------------------
     logger.info("Compiling function...")

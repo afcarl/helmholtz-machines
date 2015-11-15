@@ -33,6 +33,7 @@ from helmholtz import replicate_batch
 from helmholtz.gmm import GMM
 from helmholtz.bihm import BiHM
 from helmholtz.rws import ReweightedWakeSleep
+from helmholtz.vae import VAE
 
 logger = logging.getLogger("sample.py")
 
@@ -68,7 +69,7 @@ if __name__ == "__main__":
     while len(brick.parents) > 0:
         brick = brick.parents[0]
 
-    assert isinstance(brick, (ReweightedWakeSleep, GMM, BiHM))
+    assert isinstance(brick, (ReweightedWakeSleep, GMM, BiHM, VAE))
 
     #----------------------------------------------------------------------
     estimate_z = not args.no_z_est and isinstance(brick, (BiHM, GMM))
@@ -87,7 +88,8 @@ if __name__ == "__main__":
         #-------------------------------------------------------
 
         seq = []
-        for _ in xrange(0, args.zsamples, args.max_batch):
+        pbar = ProgressBar()
+        for _ in pbar(xrange(0, args.zsamples, args.max_batch)):
             seq.append(float(do_z(args.max_batch)))
         
         log_z2 = logsumexp(seq) - np.log(args.zsamples)
@@ -102,9 +104,6 @@ if __name__ == "__main__":
 
     log_p, log_ps = brick.log_likelihood(x, n_samples)
     
-    #log_p = tensor.mean(log_p)
-    #log_ps = tensor.mean(log_ps)
-
     do_nll = theano.function(
                         [x, n_samples], 
                         [log_p, log_ps],
