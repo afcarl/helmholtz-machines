@@ -138,7 +138,8 @@ class BiHM(HelmholtzMachine):
     
         return subsamples, log_w
 
-    def importance_weights(self, samples, log_p, log_q):
+    @application(inputs=['log_p', 'log_q'], outputs=['w'])
+    def importance_weights(self, log_p, log_q):
         # Sum all layers
         log_p_all = sum(log_p)   # This is the python sum over a list
         log_q_all = sum(log_q)   # This is the python sum over a list
@@ -207,7 +208,7 @@ class BiHM(HelmholtzMachine):
         log_psx = (logsumexp((log_p_all-log_q_all)/2, axis=-1) - tensor.log(n_samples)) * 2.
 
         # Approximate log p(x) and calculate IS weights
-        w = self.importance_weights(samples, log_p, log_q)
+        w = self.importance_weights(log_p, log_q)
 
         wp = w.reshape( (batch_size*n_samples, ) )
         wq = w.reshape( (batch_size*n_samples, ) )
