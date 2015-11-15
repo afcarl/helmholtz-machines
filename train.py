@@ -113,7 +113,8 @@ def main(args):
         else: 
             raise "Unknown hidden nonlinearity %s" % args.hidden_act
 
-        model = VAE(x_dim=x_dim, hidden_layers=layer_sizes, hidden_act=hidden_act, z_dim=z_dim)
+        model = VAE(x_dim=x_dim, hidden_layers=layer_sizes, hidden_act=hidden_act, z_dim=z_dim,
+                    batch_norm=args.batch_normalization)
         model.initialize()
     elif args.method == 'dvae':
         sizes_tag = args.layer_spec.replace(",", "-")
@@ -132,7 +133,8 @@ def main(args):
         else: 
             raise "Unknown hidden nonlinearity %s" % args.hidden_act
 
-        model = DVAE(x_dim=x_dim, hidden_layers=layer_sizes, hidden_act=hidden_act, z_dim=z_dim)
+        model = DVAE(x_dim=x_dim, hidden_layers=layer_sizes, hidden_act=hidden_act, z_dim=z_dim,
+                    batch_norm=args.batch_normalization)
         model.initialize()
     elif args.method == 'rws':
         sizes_tag = args.layer_spec.replace(",", "-")
@@ -403,6 +405,8 @@ if __name__ == "__main__":
                 default=1, help="Number of samples")
     subparser.add_argument("--activation", choices=['tanh', 'logistic', 'relu'], dest="activation",
                 default='relu', help="Activation function (last p(x|z) layer is always Logistic; default: relu)")
+    subparser.add_argument("--batch-normalization", "--batchnorm", action="store_true",
+                default=False, help="Use Batch normalization for encoder/decoder MLPs)")
     subparser.add_argument("layer_spec", type=str, 
                 default="200,100", help="Comma seperated list of layer sizes (last is z-dim)")
 
@@ -413,6 +417,8 @@ if __name__ == "__main__":
                 default=1, help="Number of samples")
     subparser.add_argument("--activation", choices=['tanh', 'logistic', 'relu'], dest="activation",
                 default='relu', help="Activation function (last p(x|z) layer is always Logistic; default: relu)")
+    subparser.add_argument("--batch-normalization", "--batchnorm", action="store_true",
+                default=False, help="Use Batch normalization for encoder/decoder MLPs)")
     subparser.add_argument("layer_spec", type=str, 
                 default="200,100", help="Comma seperated list of layer sizes (last is z-dim)")
 

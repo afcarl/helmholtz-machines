@@ -86,6 +86,23 @@ class VAE(HelmholtzMachine, Random):
         return [z], [log_p], [log_q]
 
 
+    @application(inputs=['log_p', 'log_q'], outputs=['w'])
+    def importance_weights(self, log_p, log_q):
+        """ Calculate importance weights for the given samples """
+
+        # Sum all layers
+        log_p_all = sum(log_p)   # Python sum over a list
+        log_q_all = sum(log_q)   # Python sum over a list
+
+        # Calculate sampling weights
+        log_pq = (log_p_all-log_q_all)
+        w_norm = logsumexp(log_pq, axis=1)
+        log_w = log_pq-tensor.shape_padright(w_norm)
+        w = tensor.exp(log_w)
+
+        return w
+
+
     @application(inputs=['features', 'n_samples'], outputs=['log_px', 'log_px'])
     def log_likelihood(self, features, n_samples):
         batch_size = features.shape[0]
@@ -103,18 +120,38 @@ class VAE(HelmholtzMachine, Random):
         return log_px, log_px
 
 
-    @application(inputs=['log_p', 'log_q'], outputs=['w'])
-    def importance_weights(self, log_p, log_q):
-        """ Calculate importance weights for the given samples """
+    @application(inputs=['features', 'n_samples'], outputs=['log_p_bound'])
+    def log_likelihood_bound(self, features, n_samples=1):
+        """Compute the LL bound. """
+        batch_size = features.shape[0]
 
-        # Sum all layers
-        log_p_all = sum(log_p)   # Python sum over a list
-        log_q_all = sum(log_q)   # Python sum over a list
+        z_mu, z_log_sigma = self.q.sample_expected(features)
 
-        # Calculate sampling weights
-        log_pq = (log_p_all-log_q_all)
-        w_norm = logsumexp(log_pq, axis=1)
-        log_w = log_pq-tensor.shape_padright(w_norm)
-        w = tensor.exp(log_w)
+        # Recosntruction...
+        features_r    = replicate_batch(features, n_samples)
+        z_mu_r        = replicate_batch(z_mu, n_samples)
+        z_log_sigma_r = replicate_batch(z_log_sigma, n_samples)
 
-        return w
+        epsilon = self.theano_rng.normal(size=z_mu_r.shape, dtype=z_mu_r.dtype)
+        z_r = z_mu_r + epsilon * tensor.exp(z_log_sigma_r)
+
+        recons_term = self.p.log_prob(features_r, z_r)
+        recons_term = recons_term.reshape([batch_size, n_samples])
+        recons_term = tensor.sum(recons_term, axis=1) / n_samples
+
+        # KL divergence
+        per_dim_kl = (
+                self.prior_log_sigma - z_log_sigma 
+                + (tensor.exp(2*z_log_sigma)+(z_mu-self.prior_mu)**2) / tensor.exp(2*self.prior_log_sigma) / 2.
+                - 0.5)
+    
+        kl_term = per_dim_kl.sum(axis=1)
+
+        self.kl_term = kl_term
+        self.kl_term.name = 'kl_term'
+        self.recons_term = recons_term
+        self.recons_term.name = 'recons_term'
+
+        log_p_bound = recons_term - kl_term
+
+        return log_p_bound
