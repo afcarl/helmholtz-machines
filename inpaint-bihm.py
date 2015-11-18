@@ -15,6 +15,8 @@ import cPickle as pickle
 import theano
 import theano.tensor as tensor
 
+import helmholtz.datasets as datasets
+
 from theano.sandbox.rng_mrg import MRG_RandomStreams
 from theano.tensor.shared_randomstreams import RandomStreams
 
@@ -53,6 +55,7 @@ def subsample(weights, n_samples):
     return idx
 
 #-----------------------------------------------------------------------------
+
 
 def sample_conditional(h_upper, h_lower, p_upper, p_lower, q_upper, q_lower, oversample) :
     """ return (h, log_ps) """
@@ -156,16 +159,45 @@ def sample_bottom_conditional(h_upper, p_upper, ll_function, q_upper, oversample
     return x[idx, :]
 
 
+def inpaint_bottom_conditional(h_upper, p_upper, ll_function, q_upper, x, mask, oversample, ninner):
+    nsamples = 1
+
+    x = replicate_batch(x, oversample)
+    mask = replicate_batch(mask, oversample)
+    h_upper = replicate_batch(h_upper, oversample)
+
+    x_, _ = p_upper.sample(h_upper)
+    x = mask*x + (1-mask)*x_
+
+    log_p = p_upper.log_prob(x, h_upper)
+
+    # Evaluate q(x)
+    _, log_ql = ll_function(x, ninner)
+    log_qu = q_upper.log_prob(h_upper, x)
+
+    # Calculate weights
+    log_w = (log_ql + log_qu - log_p) / 2
+    w_norm = logsumexp(log_w, axis=0)
+    log_w = log_w-w_norm
+    w = tensor.exp(log_w)
+
+    idx = subsample(w, nsamples)
+
+    return x[idx, :]
+
+
+
+
 #-----------------------------------------------------------------------------
 
 if __name__ == "__main__":
     parser = ArgumentParser()
     parser.add_argument("--show", action="store_true")
     parser.add_argument("--savepdf", "--pdf", action="store_true")
+    parser.add_argument("--data", "-d", dest='data', choices=datasets.supported_datasets,
+                default='bmnist', help="Dataset to use")
     parser.add_argument("--expected", "-e", action="store_true",
             help="Display expected output from last layer")
-    parser.add_argument("--niter", "--iter", type=int, 
-            default=100, help="no. terations")
     parser.add_argument("--nsamples", "--samples", "-s", type=int, 
             default=100, help="no. of samples to draw")
     parser.add_argument("--oversample", "--oversamples", type=int, 
@@ -197,19 +229,16 @@ if __name__ == "__main__":
         sqrt = int(np.sqrt(p0.dim_X))
         img_shape = [sqrt, sqrt]
 
-
-    #np.random.seed();
-    for layer in brick.p_layers:
-        layer.theano_rng.seed(np.random.randint(500))
-
-
     #----------------------------------------------------------------------
     # Compile functions
     n_layers = len(brick.p_layers)
+
     oversample = tensor.iscalar('oversamples')
     n_samples = tensor.iscalar('n_samples')
     n_inner = tensor.iscalar('n_inner')
-    n_iter = args.niter 
+    x = tensor.fmatrix('x')
+    mask = tensor.fmatrix('mask')
+    n_iter = 1000
 
     #----------------------------------------------------------------------
     logger.info("Compiling even/odd-sampling...")
@@ -218,14 +247,19 @@ if __name__ == "__main__":
         assert len(h) == n_layers
         h = list(h)
 
+    def one_iter(*h):
+        assert len(h) == n_layers
+        h = list(h)
+
         for first in (1, 0):
             for l in xrange(first, n_layers, 2):
                 if l == 0:
-                    h[l] = sample_bottom_conditional(
+                    h[l] = inpaint_bottom_conditional(
                         h[1],
                         brick.p_layers[0],
                         brick.log_likelihood,
                         brick.q_layers[0],
+                        x, mask,
                         oversample, n_inner)
                 elif l == n_layers-1:
                     h[l] = sample_top_conditional(
@@ -243,8 +277,12 @@ if __name__ == "__main__":
                         oversample)
         return h
 
+    #h, _, _ = brick.sample_q(x)
     h, _, _ = brick.sample_p(1)
     h = list(h)
+
+    #h[0], _ = brick.p_layers[0].sample(h[1])
+    #h[0] = mask * x + (1-mask) * h[0]
 
     outputs, updates = theano.scan(fn=one_iter, 
             outputs_info=h, 
@@ -256,32 +294,58 @@ if __name__ == "__main__":
         h[0] = brick.p_layers[0].sample_expected(h[1])
     
     do_evenodd = theano.function(
-                    [oversample, n_inner], h,
+                    [x, mask, oversample, n_inner], h,
                     updates=updates,
                     name="evenodd", allow_input_downcast=True, on_unused_input='ignore')
         
     #----------------------------------------------------------------------
     # XXX call it XXX
 
-    import pylab
-
     n_samples = args.nsamples
     n_inner = args.ninner
     oversample = args.oversample
 
-    x = [None] * n_samples
+
+    logger.info("Loading dataset...")
+
+    x_dim, data_train, data_valid, data_test = datasets.get_data(args.data)
+
+
+    masks = np.zeros((4, 28, 28))
+    masks[0, :14, :] = 1
+    masks[1, :, :14] = 1
+    masks[2, 14:, :] = 1
+    masks[3, :, 14:] = 1
+    masks = masks.reshape(4, 28*28)
+
+    n_examples = 100
+    x = [None] * n_examples
+
+    #sel = [0, 1, 2, 6, 12, 15, 16, 17, 18, 20, 22]
+    sel = [20, 32, 54, 15, 57, 6, 2, 1, 0, 111] #] 102, 111, 543, 234, 111] #0, 1, 2, 6, 12, 15, 16, 17, 18, 20, 22]
+
 
     progress = ProgressBar()
-    for n in progress(xrange(n_samples)):
-        h = do_evenodd(oversample, n_inner)
+    for n in progress(xrange(n_examples)):
+        features = data_train.get_data(None, sel[n // 10])[0]
+        features = features.reshape((1, x_dim))
+
+        noise = 0.5*np.ones_like(features)
+        mask = masks[(n // 10) % 4, :].reshape(1, -1)
+        features = mask * features + (1-mask)*noise
+        
+        h = do_evenodd(features, mask, oversample, n_inner)
         x[n] = h[0]
+        x[n][0,:] = features
+        x[n][:,:] = mask*features + (1-mask)*x[n]
 
     x = np.concatenate(x)
-    x = x.reshape( [n_samples,n_iter]+img_shape)
+    x = x.reshape( [n_examples,n_iter]+img_shape)
 
-    for i in xrange(n_iter):
+    import pylab
+    for i in xrange(0, n_iter, 2):
         fname = os.path.splitext(args.experiment)[0]
-        fname += "-mcsamples%03d.png" % i
+        fname += "-inpaint%03d.png" % (i // 2)
 
         logger.info("Saving %s ..." % fname)
         img = img_grid(x[:,i], global_scale=True)
@@ -289,7 +353,7 @@ if __name__ == "__main__":
 
         if args.savepdf and (i % 10 == 0):
             fname = os.path.splitext(args.experiment)[0]
-            fname += "-mcsamples%03d.pdf" % i
+            fname += "-inpaint%03d.pdf" % i
 
             logger.info("Saving %s ..." % fname)
             pylab.figure()
@@ -299,7 +363,9 @@ if __name__ == "__main__":
                 pylab.axis('off')
                 pylab.imshow(x[j,i], interpolation='nearest')
             pylab.savefig(fname)
-    
+ 
+
+
     if args.show:
         import pylab
 
