@@ -147,5 +147,5 @@ if __name__ == "__main__":
             print("log p / log p~ / log p* [%6d spls]:  %5.2f+-%4.2f  /  %5.2f+-%4.2f  /  %5.2f" % 
                 (K, log_p, log_p_, log_ps, log_ps_, log_ps-log_z2))
         else:
-            print("log p / log p~ [%ds spls]:  %5.2f+-%4.2f  /  %5.2f+-%4.2f" %
+            print("log p / log p~ [%6d spls]:  %5.2f+-%4.2f  /  %5.2f+-%4.2f" %
                 (K, log_p, log_p_, log_ps, log_ps_))
