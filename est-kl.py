@@ -78,8 +78,6 @@ if __name__ == "__main__":
     log_p = unflatten_values(log_p, batch_size, n_samples)
     log_q = unflatten_values(log_q, batch_size, n_samples)
 
-
-
     # Importance weights for q proposal for p
     log_p_all = sum(log_p)   # This is the python sum over a list
     log_q_all = sum(log_q)   # This is the python sum over a list
@@ -102,7 +100,7 @@ if __name__ == "__main__":
     logger.info("Loading dataset...")
 
     n_samples = args.nsamples
-    batch_size = 5*max(1, 10000 // args.nsamples)
+    batch_size = max(1, 10000 // args.nsamples)
     
     x_dim, stream_train, stream_valid, stream_test = datasets.get_streams(args.data, batch_size)
     stream = stream_test

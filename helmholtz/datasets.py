@@ -42,6 +42,8 @@ def get_streams(data_name, batch_size):
     else:
         map_fn = None
 
+    small_batch_size = max(1, batch_size // 10)
+
     # Our usual train/valid/test data streams...
     x_dim, data_train, data_valid, data_test = get_data(data_name)
     train_stream, valid_stream, test_stream = (
@@ -54,8 +56,8 @@ def get_streams(data_name, batch_size):
             fn=map_fn),
             which_sources='features')
         for data, batch_size in ((data_train, batch_size),
-                                 (data_valid, batch_size // 10),
-                                 (data_test, batch_size // 10))
+                                 (data_valid, small_batch_size),
+                                 (data_test, small_batch_size))
     )
 
     return x_dim, train_stream, valid_stream, test_stream
