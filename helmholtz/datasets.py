@@ -8,7 +8,9 @@ from fuel.streams import DataStream
 from fuel.transformers import Flatten, SourcewiseTransformer
 
 local_datasets = ["adult", "dna", "web", "nips", "mushrooms", "ocr_letters", "connect4", "rcv1"]
-supported_datasets = local_datasets + ['mnist', 'bmnist', 'bars', 'silhouettes', 'tfd']
+labeled_datasets = ["lbmnist"]
+
+supported_datasets = local_datasets + labeled_datasets + ['mnist', 'bmnist', 'bars', 'silhouettes', 'tfd']
 
 # 'tfd' is missing but needs normalization 
 
@@ -34,7 +36,11 @@ def map_tfd(batch):
 
 
 def get_streams(data_name, batch_size):
+    """ Returns
+    
 
+	x_dim, y_dim, data_train, data_valid, data_test    
+    """
     if data_name == "mnist":
         map_fn = map_mnist
     elif data_name == "tfd":
@@ -45,7 +51,7 @@ def get_streams(data_name, batch_size):
     small_batch_size = max(1, batch_size // 10)
 
     # Our usual train/valid/test data streams...
-    x_dim, data_train, data_valid, data_test = get_data(data_name)
+    x_dim, y_dim, data_train, data_valid, data_test = get_data(data_name)
     train_stream, valid_stream, test_stream = (
             Flatten(
             MapFeatures(
@@ -60,14 +66,20 @@ def get_streams(data_name, batch_size):
                                  (data_test, small_batch_size))
     )
 
-    return x_dim, train_stream, valid_stream, test_stream
+    return x_dim, y_dim, train_stream, valid_stream, test_stream
 
 
 def get_data(data_name):
+    """ Returns
+    
+
+	x_dim, y_dim, data_train, data_valid, data_test    
+    """
     if data_name == 'bmnist':
         from fuel.datasets.binarized_mnist import BinarizedMNIST
 
         x_dim = 28*28 
+	y_dim = 0
 
         data_train = BinarizedMNIST(which_sets=['train'], sources=['features'])
         data_valid = BinarizedMNIST(which_sets=['valid'], sources=['features'])
@@ -76,6 +88,7 @@ def get_data(data_name):
         from fuel.datasets.mnist import MNIST
 
         x_dim = 28*28 
+	y_dim = 0        
 
         data_train = MNIST(which_sets=['train'], sources=['features'])
         data_valid = MNIST(which_sets=['test'], sources=['features'])
@@ -85,6 +98,7 @@ def get_data(data_name):
 
         size = 28
         x_dim = size*size
+	y_dim = 0        
 
         data_train = CalTech101Silhouettes(which_sets=['train'], size=size, sources=['features'])
         data_valid = CalTech101Silhouettes(which_sets=['valid'], size=size, sources=['features'])
@@ -95,7 +109,9 @@ def get_data(data_name):
         size = 48
         x_dim = size*size
 
-        data_train = TorontoFaceDatabase(which_sets=['unlabeled'], size=size, sources=['features'])
+ 	y_dim = 0       
+ 	
+ 	data_train = TorontoFaceDatabase(which_sets=['unlabeled'], size=size, sources=['features'])
         data_valid = TorontoFaceDatabase(which_sets=['valid'], size=size, sources=['features'])
         data_test  = TorontoFaceDatabase(which_sets=['test'], size=size, sources=['features'])
     elif data_name == 'bars':
@@ -103,10 +119,34 @@ def get_data(data_name):
 
         width = 4
         x_dim = width*width
-
+	y_dim = 0
+	
         data_train = Bars(num_examples=5000, width=width, sources=['features'])
         data_valid = Bars(num_examples=5000, width=width, sources=['features'])
         data_test  = Bars(num_examples=5000, width=width, sources=['features'])
+    elif data_name in  labeled_datasets:
+        from fuel.datasets.hdf5 import H5PYDataset
+
+        fname = "data/"+data_name+".hdf5"
+        
+        data_train = H5PYDataset(fname, which_sets=["train"], sources=['features', 'targets'], load_in_memory=True) 
+        data_valid = H5PYDataset(fname, which_sets=["valid"], sources=['features', 'targets'], load_in_memory=True) 
+        data_test  = H5PYDataset(fname, which_sets=["test"], sources=['features', 'targets'], load_in_memory=True) 
+
+        some_features, some_targets = data_train.get_data(None, slice(0, 100))
+        assert some_features.shape[0] == 100 
+        assert some_targets.shape[0] == 100 
+
+        #print some_features.ndim
+        x_dim = 1
+        for i in range(1, some_features.ndim):
+            x_dim = x_dim*some_features.shape[i]
+	
+        #print some_targets.ndim
+        y_dim = 1
+        for i in range(1, some_targets.ndim):
+            y_dim = y_dim*some_targets.shape[i]	
+
     elif data_name in local_datasets:
         from fuel.datasets.hdf5 import H5PYDataset
 
@@ -121,7 +161,8 @@ def get_data(data_name):
 
         some_features = some_features.reshape([100, -1])
         x_dim = some_features.shape[1]
+	y_dim = 0        
     else:
         raise ValueError("Unknown dataset %s" % data_name)
 
-    return x_dim, data_train, data_valid, data_test
+    return x_dim, y_dim, data_train, data_valid, data_test

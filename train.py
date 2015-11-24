@@ -17,7 +17,7 @@ import fuel
 import theano
 import numpy as np
 
-import blocks.extras
+#import blocks.extras
 import blocks
 
 from argparse import ArgumentParser
@@ -50,11 +50,12 @@ from blocks_extras.extensions.display import ImageDataStreamDisplay, WeightDispl
 
 import helmholtz.datasets as datasets
 
-from helmholtz import create_layers
+from helmholtz import create_layers, create_semi_layers
 from helmholtz.bihm import BiHM
 from helmholtz.dvae import DVAE
 from helmholtz.rws import ReweightedWakeSleep
 from helmholtz.vae import VAE
+from helmholtz.semibihm import SemiBiHM
 
 floatX = theano.config.floatX
 fuel.config.floatX = floatX
@@ -89,7 +90,7 @@ def main(args):
     """Run experiment. """
     lr_tag = float_tag(args.learning_rate)
 
-    x_dim, train_stream, valid_stream, test_stream = datasets.get_streams(args.data, args.batch_size)
+    x_dim, y_dim, train_stream, valid_stream, test_stream = datasets.get_streams(args.data, args.batch_size)
 
     #------------------------------------------------------------
     # Setup model
@@ -168,10 +169,22 @@ def main(args):
                 l2reg=args.l2reg,
             )
         model.initialize()
+    elif args.method == 'semi-bihm':
+        supervised_layer_size = args.supervised_layer_size.replace(",", "-")
+        UNsupervised_layer_size = args.UNsupervised_layer_size.replace(",", "-")
+        name = "%s-%s-%s-lr%s-dl%d-spl%d" % \
+            (args.method, args.data, args.name, lr_tag, args.deterministic_layers, args.n_samples) + "-"+args.UNsupervised_layer_size + "-"+args.supervised_layer_size
+
+	p_y, p_h1, p_h2_layers, p_layers, q_layers, q_y , q_h2_layers, q_y_given_x = \
+	    create_semi_layers(args.supervised_layer_size, args.UNsupervised_layer_size, data_dim=x_dim, y_dim=y_dim)
+    
+      	sup_size = [int(i) for i in args.supervised_layer_size.split(",")]
+	unsup_size = [int(i) for i in args.UNsupervised_layer_size.split(",")]
+        model = SemiBiHM(p_y, p_h1, p_h2_layers, p_layers, q_layers, q_y , q_h2_layers, q_y_given_x , x_dim,    y_dim,  sup_size, unsup_size   )
+	model.initialize()
     elif args.method == 'continue':
         import cPickle as pickle
         from os.path import basename, splitext
-
 
         with open(args.model_file, 'rb') as f:
             m = pickle.load(f)
@@ -193,6 +206,12 @@ def main(args):
     #------------------------------------------------------------
 
     x = tensor.matrix('features')
+    x = x.reshape((args.batch_size,x_dim ))
+    y = tensor.matrix('targets' ).astype('int32')
+    y = y.reshape((args.batch_size,y_dim ))
+
+    mask = np.ones((args.batch_size,1)).astype('int32')# tensor.col('mask', dtype='int32')
+
 
     #------------------------------------------------------------
     # Testset monitoring
@@ -201,15 +220,19 @@ def main(args):
     valid_monitors = []
     test_monitors = []
     for s in [1, 10, 100, 1000]:
-        log_p, log_ph = model.log_likelihood(x, s)
-        log_p  = -log_p.mean()
-        log_ph = -log_ph.mean()
-        log_p.name  = "log_p_%d" % s
-        log_ph.name = "log_ph_%d" % s
+        lower_bound = model.log_likelihood(x, y, s, mask )
+        lower_bound  = lower_bound.mean()
+        lower_bound.name  = "lower_bound_%d" % s
 
-        #train_monitors += [log_p, log_ph]
-        #valid_monitors += [log_p, log_ph]
-        test_monitors += [log_p, log_ph]
+        test_monitors.append(lower_bound)
+
+	### Jorgs old stuff ###
+        # log_p, log_ph = model.log_likelihood(x, s)
+        # log_p  = -log_p.mean()
+        # log_ph = -log_ph.mean()
+        # log_p.name  = "log_p_%d" % s
+        # log_ph.name = "log_ph_%d" % s
+        # test_monitors += [log_p, log_ph]
 
     #------------------------------------------------------------
     # Gradient and training monitoring
@@ -224,6 +247,21 @@ def main(args):
         train_monitors += [log_p_bound, named(model.kl_term.mean(), 'kl_term'), named(model.recons_term.mean(), 'recons_term')]
         valid_monitors += [log_p_bound, named(model.kl_term.mean(), 'kl_term'), named(model.recons_term.mean(), 'recons_term')]
         test_monitors  += [log_p_bound, named(model.kl_term.mean(), 'kl_term'), named(model.recons_term.mean(), 'recons_term')]
+    elif args.method == 'semi-bihm':
+	expectation, accuracy,log_q_y_sup , log_q_y_unsup, sup_lower_bound , unsup_lower_bound, cost, total_lower_bound, gradients = \
+	    model.get_gradients(x,  y, args.n_samples , mask)
+
+	cost = -cost.mean()
+	sup_lower_bound= named( -sup_lower_bound.mean(), "sup_lower_bound")
+	unsup_lower_bound = named( -unsup_lower_bound.mean(), "unsup_lower_bound")
+	log_q_y_sup = named( -log_q_y_sup.mean(), "log_q_y_sup")
+	log_q_y_unsup = named( -log_q_y_unsup.mean(), "log_q_y_unsup")
+	expectation= named( -expectation.mean(), "expectation")
+	total_lower_bound= named( -total_lower_bound.mean(), "total_lower_bound")
+	accuracy .name  = "accuracy"
+
+	train_monitors = [expectation, accuracy,log_q_y_sup , log_q_y_unsup, sup_lower_bound , unsup_lower_bound, cost, total_lower_bound]
+	valid_monitors = [expectation, accuracy,log_q_y_sup , log_q_y_unsup, sup_lower_bound , unsup_lower_bound, cost, total_lower_bound]
     else:
         log_p, log_ph, gradients = model.get_gradients(x, args.n_samples)
         log_p  = -log_p.mean()
@@ -318,9 +356,11 @@ def main(args):
                 name,
                 [Plotter(channels=[
                         ["valid_%s" % cost.name, "valid_log_p"],
+                        ["train_lower_bound" ,"valid_lower_bound" ],
                         ["train_total_gradient_norm", "train_total_step_norm"]],
                     titles=[
                         "validation cost",
+                        "more stuff",
                         "norm of training gradient and step"
                     ]),
                 DisplayImage([
@@ -446,6 +486,17 @@ if __name__ == "__main__":
     subparser.add_argument("layer_spec", type=str,
                 default="200,200,200", help="Comma seperated list of layer sizes")
 
+    # Semisupervised Bidirection HM
+    subparser = subparsers.add_parser("semi-bihm",
+                help="Semisupervise BiHM with RWS")
+    subparser.add_argument("--nsamples", "-s", type=int, dest="n_samples",
+                default=10, help="Number of IS samples")
+    subparser.add_argument("--deterministic-layers", type=int, dest="deterministic_layers",
+                default=0, help="Deterministic hidden layers per stochastic layer")
+    subparser.add_argument("UNsupervised_layer_size", type=str,
+                default="200,200,200", help="Comma seperated list of unsupervised layer sizes")
+    subparser.add_argument("supervised_layer_size", type=str,
+                default="200,200,200", help="Comma seperated list of supervised layer sizes")
     args = parser.parse_args()
-
+    
     main(args)
