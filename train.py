@@ -205,7 +205,7 @@ def main(args):
         log_p  = -log_p.mean()
         log_ph = -log_ph.mean()
         log_p.name  = "log_p_%d" % s
-        log_ph.name = "log_ph_%d" %s
+        log_ph.name = "log_ph_%d" % s
 
         #train_monitors += [log_p, log_ph]
         #valid_monitors += [log_p, log_ph]
@@ -296,9 +296,9 @@ def main(args):
         parameters=parameters,
         gradients=gradients,
         step_rule=CompositeRule([
-            StepClipping(25),
+            #StepClipping(25),
             step_rule,
-            RemoveNotFinite(0.9),
+            #RemoveNotFinite(1.0),
         ])
     )
 
