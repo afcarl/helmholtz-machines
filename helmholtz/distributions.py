@@ -1,4 +1,4 @@
-#!/usr/bin/env python 
+#!t usr/bin/env python 
 
 from __future__ import division, print_function
 
@@ -6,6 +6,7 @@ import logging
 
 import theano
 import theano.tensor as tensor
+import theano.tensor as T
 
 import numpy as np
 
@@ -86,6 +87,8 @@ def replace_bernoulli_op(node):
     samples = (noise < prob).astype(floatX)
     
     return [samples]
+
+
 class Multinomial(theano.Op):
     '''Converts samples from a uniform into sample from a multinomial.'''
     def __init__(self, odtype):
@@ -128,7 +131,7 @@ class Multinomial(theano.Op):
     def grad(self, ins, outgrads):
         pvals, unis = ins
         (gz,) = outgrads
-        return [T.zeros_like(x) for x in ins]
+        return [tensor.zeros_like(x) for x in ins]
 
     def c_code_cache_version(self):
         return (5,)

@@ -197,11 +197,11 @@ class SemiBiHM(HelmholtzMachine):
         
         return samples_y,samples_layers, samples_h2,log_p_layers,log_p_y, log_p_h2_layers, log_q_layers, log_q_y, log_q_h2_layers
  
+
     def sample_q_unsup(self, features, n_samples, samples_h1):
         n_unsup_layers = len(self.q_layers)
         n_sup_layers =  len(self.p_h2_layers) 
      
-
         p_layers = self.p_layers #p(h1_i| h1_i+1)
         p_y = self.p_y
         p_h1 = self.p_h1 #p(h1| h2,y)
@@ -225,21 +225,13 @@ class SemiBiHM(HelmholtzMachine):
         batch_size = features.shape[0]
  
  
-
-
- 
         log_q_layers[0] = tensor.zeros([batch_size])
- 
-         
         for l in xrange(n_unsup_layers):
-    
             _, log_q_layers[l+1] = q_layers[l].sample(samples_layers[l]) 
         samples_y, log_q_y = q_y.sample(samples_layers[n_unsup_layers])
  
         samples_h2_layers[0], log_q_h2_layers[0] = q_h2_layers[0].sample_concatenate(samples_layers[n_unsup_layers],samples_y)
- 
         for l in xrange(n_sup_layers-1):
- 
             samples_h2_layers[l+1], log_q_h2_layers[l+1] = q_h2_layers[l+1].sample(samples_h2_layers[l])
  
         log_p_layers = [None] * n_unsup_layers #p(h1_i| h1_i+1)
@@ -251,11 +243,8 @@ class SemiBiHM(HelmholtzMachine):
         log_p_h2_layers[n_sup_layers-1] = p_h2_layers[n_sup_layers-1].log_prob(samples_h2_layers[n_sup_layers-1])
         for l in reversed(range(1, n_sup_layers)):
             log_p_h2_layers[l-1] = p_h2_layers[l-1].log_prob(samples_h2_layers[l-1], samples_h2_layers[l])
-            
-        
  
         for l in reversed(range(1, n_unsup_layers)):
-         
             log_p_layers[l-1] = p_layers[l-1].log_prob(samples_layers[l-1], samples_layers[l]) 
         log_p_layers[n_unsup_layers-1] = p_layers[n_unsup_layers-1].log_prob(samples_layers[n_unsup_layers-1], samples_layers[n_unsup_layers]) 
         samples_sup = tensor.concatenate([samples_h2_layers[0], samples_y ], axis=1)
@@ -263,10 +252,10 @@ class SemiBiHM(HelmholtzMachine):
   
         return  samples_y, samples_h2_layers, log_p_layers, log_p_y ,log_p_h1 , log_p_h2_layers, log_q_layers, log_q_y, log_q_h2_layers
         
+
     def sample_q_sup (self, features, label ):
         n_unsup_layers =  len(self.q_layers) 
         n_sup_layers =  len(self.p_h2_layers) 
-     
          
         p_layers = self.p_layers #p(h1_i| h1_i+1)
 
@@ -291,24 +280,17 @@ class SemiBiHM(HelmholtzMachine):
         log_q_h2_layers =[None] * n_sup_layers
         
         batch_size = features.shape[0]
- 
-
 
         samples_layers[0] = features 
         log_q_layers[0] = tensor.zeros([batch_size])
 
         for l in xrange(n_unsup_layers):
-          
             samples_layers[l+1], log_q_layers[l+1] = q_layers[l].sample(samples_layers[l])
-            
-
          
         samples_h2_layers[0], log_q_h2_layers[0] = q_h2_layers[0].sample_concatenate(samples_layers[n_unsup_layers],samples_y)
  
  
         for l in xrange(n_sup_layers-1):
-            
-   
             samples_h2_layers[l+1], log_q_h2_layers[l+1] = q_h2_layers[l+1].sample(samples_h2_layers[l])
  
         log_q_y = q_y.log_prob( samples_y, samples_layers[n_unsup_layers])
@@ -326,7 +308,6 @@ class SemiBiHM(HelmholtzMachine):
    
  
         for l in reversed(range(1, n_unsup_layers)):
-         
             log_p_layers[l-1] = p_layers[l-1].log_prob(samples_layers[l-1], samples_layers[l]) 
          
         log_p_layers[n_unsup_layers-1] = p_layers[n_unsup_layers-1].log_prob(samples_layers[n_unsup_layers-1], samples_layers[n_unsup_layers]) 
@@ -334,10 +315,11 @@ class SemiBiHM(HelmholtzMachine):
         log_p_h1 = self.p_h1.log_prob(samples_layers[n_unsup_layers], samples_sup)
       
         return samples_layers, samples_y, samples_h2_layers, log_p_layers, log_p_y ,log_p_h1 , log_p_h2_layers, log_q_layers, log_q_y, log_q_h2_layers
+
+
     def sample_h1_y (self, features, n_samples, h2):
         n_unsup_layers =  len(self.q_layers)
         n_sup_layers =  len(self.p_h2_layers) 
-     
 
         p_layers = self.p_layers #p(h1_i| h1_i+1)
         p_y = self.p_y
@@ -360,17 +342,11 @@ class SemiBiHM(HelmholtzMachine):
         log_q_h2_layers =[None] * n_sup_layers
  
         batch_size = features.shape[0]
- 
- 
-
-
 
         samples_layers[0] = features 
         log_q_layers[0] = tensor.zeros([batch_size])
  
         for l in xrange(n_unsup_layers):
-            
-            
             samples_layers[l+1], log_q_layers[l+1] = q_layers[l].sample(samples_layers[l])
             
         samples_y, log_q_y = q_y.sample(samples_layers[n_unsup_layers]) 
@@ -381,10 +357,6 @@ class SemiBiHM(HelmholtzMachine):
         _, log_q_h2_layers[0] = q_h2_layers[0].sample_concatenate(samples_layers[n_unsup_layers],samples_y)
     
 
-
- 
- 
-    
         for l in xrange(n_sup_layers-1):
             _, log_q_h2_layers[l+1] = q_h2_layers[l+1].sample(samples_h2_layers[l])
  
@@ -400,16 +372,16 @@ class SemiBiHM(HelmholtzMachine):
         for l in reversed(range(1, n_sup_layers)):
             log_p_h2_layers[l-1] = p_h2_layers[l-1].log_prob(samples_h2_layers[l-1], samples_h2_layers[l])
         
- 
-  
         for l in reversed(range(1, n_unsup_layers)):
-         
             log_p_layers[l-1] = p_layers[l-1].log_prob(samples_layers[l-1], samples_layers[l]) 
+
         log_p_layers[n_unsup_layers-1] = p_layers[n_unsup_layers-1].log_prob(samples_layers[n_unsup_layers-1], samples_layers[n_unsup_layers]) 
         samples_sup = tensor.concatenate([samples_h2_layers[0], samples_y ], axis=1)
         log_p_h1 = self.p_h1.log_prob(samples_layers[n_unsup_layers], samples_sup)   
        
         return samples_layers, samples_y,   log_p_layers, log_p_y ,log_p_h1 , log_p_h2_layers, log_q_layers, log_q_y, log_q_h2_layers
+
+
     def sample_h2 (self, features, n_samples, h1):
         n_unsup_layers =  len(self.q_layers)
         n_sup_layers =  len(self.p_h2_layers) 
@@ -437,58 +409,41 @@ class SemiBiHM(HelmholtzMachine):
  
         batch_size = features.shape[0]
  
-
-
-
         samples_layers = h1 
         log_q_layers[0] = tensor.zeros([batch_size])
  
         for l in xrange(n_unsup_layers):
-            
-            
             _, log_q_layers[l+1] = q_layers[l].sample(samples_layers[l])
             
         samples_y, log_q_y = q_y.sample(samples_layers[n_unsup_layers]) 
-             
-         
         
         samples_h2_layers[0], log_q_h2_layers[0] = q_h2_layers[0].sample_concatenate(samples_layers[n_unsup_layers],samples_y)
     
-
-
- 
- 
     
         for l in xrange(n_sup_layers-1):
             samples_h2_layers[l+1], log_q_h2_layers[l+1] = q_h2_layers[l+1].sample(samples_h2_layers[l])
- 
  
         log_p_layers = [None] * n_unsup_layers #p(h1_i| h1_i+1)
         log_p_y = []
         log_p_h1 = [] #p(h1| h2,y)
         log_p_h2_layers =[None] * n_sup_layers
-        
+
         log_p_y  = p_y.log_prob(samples_y )
         log_p_h2_layers[n_sup_layers-1] = p_h2_layers[n_sup_layers-1].log_prob(samples_h2_layers[n_sup_layers-1])
         for l in reversed(range(1, n_sup_layers)):
             log_p_h2_layers[l-1] = p_h2_layers[l-1].log_prob(samples_h2_layers[l-1], samples_h2_layers[l])
-        
- 
   
         for l in reversed(range(1, n_unsup_layers)):
-         
             log_p_layers[l-1] = p_layers[l-1].log_prob(samples_layers[l-1], samples_layers[l]) 
+
         log_p_layers[n_unsup_layers-1] = p_layers[n_unsup_layers-1].log_prob(samples_layers[n_unsup_layers-1], samples_layers[n_unsup_layers]) 
         samples_sup = tensor.concatenate([samples_h2_layers[0], samples_y ], axis=1)
         log_p_h1 = self.p_h1.log_prob(samples_layers[n_unsup_layers], samples_sup)   
        
         return samples_h2_layers, samples_y,   log_p_layers, log_p_y ,log_p_h1 , log_p_h2_layers, log_q_layers, log_q_y, log_q_h2_layers
-    
- 
-
 
         
-    def sup_lower_bound(self,features, label, n_samples):
+    def sup_lower_bound(self, features, label, n_samples):
         """It returns p_tild_star(x,y) of size ( batch_size ) """
         p_layers = self.p_layers #p(h1_i| h1_i+1)
         p_y = self.p_y
@@ -501,7 +456,7 @@ class SemiBiHM(HelmholtzMachine):
         q_y_given_x = self.q_y_given_x
         
         n_unsup_layers = len(self.q_layers)
-        n_sup_layers =  len(self.p_h2_layers) 
+        n_sup_layers = len(self.p_h2_layers) 
   
         
         batch_size = features.shape[0]
@@ -543,6 +498,7 @@ class SemiBiHM(HelmholtzMachine):
  
         return samples_layers,  sup_lower_bound  
         
+
     def unsup_lower_bound(self,features,  n_samples, samples_h1): 
         p_layers = self.p_layers #p(h1_i| h1_i+1)
         p_y = self.p_y
@@ -561,7 +517,7 @@ class SemiBiHM(HelmholtzMachine):
 
         x = replicate_batch(features, n_samples)
  
-        samples_h2, samples_y,   log_p_layers, log_p_y ,log_p_h1 , log_p_h2_layers, log_q_layers, log_q_y, log_q_h2_layers = self.sample_h2(x,  n_samples, samples_h1)
+        samples_h2, samples_y, log_p_layers, log_p_y ,log_p_h1 , log_p_h2_layers, log_q_layers, log_q_y, log_q_h2_layers = self.sample_h2(x,  n_samples, samples_h1)
         
  
         log_p_layers     = unflatten_values(log_p_layers, batch_size, n_samples)
@@ -594,11 +550,10 @@ class SemiBiHM(HelmholtzMachine):
         all_prob = 1./2*(prob_layes + prob_h2_layes+ log_p_y + log_p_h1  -log_q_y - prob_q_layes - prob_q_h2_layes  )
         unsup_lower_bound =2.0* logsumexp( all_prob, axis=-1 ) -2.0*tensor.log(n_samples )
  
- 
         return unsup_lower_bound  
  
-    def log_likelihood(self, features, label, n_samples, mask ):
- 
+
+    def log_likelihood(self, features, label, n_samples, mask):
         p_layers = self.p_layers #p(h1_i| h1_i+1)
         p_y = self.p_y
         p_h1 = self.p_h1 #p(h1| h2,y)
@@ -613,23 +568,20 @@ class SemiBiHM(HelmholtzMachine):
  
         
         batch_size = features.shape[0]
-
  
         samples_h2_layers, sup_lower_bound  =  self.sup_lower_bound(features, label, n_samples) 
- 
         sup_lower_bound = sup_lower_bound.reshape((batch_size,1)) 
         
         unsup_lower_bound  = self.unsup_lower_bound(features,   n_samples, samples_h2_layers) 
-        
         unsup_lower_bound = unsup_lower_bound.reshape((batch_size,1))
        
         sup_lower_bound  = 0.5*unsup_lower_bound + sup_lower_bound
      
         lower_bound = tensor.switch(mask, sup_lower_bound, unsup_lower_bound) #- alpha*tensor.switch(mask, sup_log_q_y_given_x, unsup_log_q_y_given_x)
-        
  
         return  lower_bound 
         
+
     def sup_importance_weights(self,     log_p_layers,log_p_y ,log_p_h1 , log_p_h2_layers , log_q_layers, log_q_y, log_q_h2_layers,batch_size, n_samples):
     
          
@@ -668,6 +620,8 @@ class SemiBiHM(HelmholtzMachine):
         w = tensor.exp(log_w)
         
         return w 
+
+
     def unsup_importance_weights(self,   log_p_layers,log_p_y ,log_p_h1 , log_p_h2_layers , log_q_layers, log_q_y, log_q_h2_layers,batch_size, n_samples):
  
         log_p_layers     = unflatten_values(log_p_layers, batch_size, n_samples)
@@ -705,6 +659,7 @@ class SemiBiHM(HelmholtzMachine):
         w = tensor.exp(log_w)
         return w  
 
+
     def onehot(self,x,numclasses=10):
  
         if x.shape==():
@@ -719,22 +674,16 @@ class SemiBiHM(HelmholtzMachine):
             result[...,c] += z
         return result
  
+
     def get_gradients(self, features, label, n_samples, mask):
 
         p_layers = self.p_layers 
- 
         p_y = self.p_y
- 
         p_h1 = self.p_h1 
- 
         p_h2_layers = self.p_h2_layers
- 
         q_layers = self.q_layers
- 
         q_h2_layers = self.q_h2_layers
- 
         q_y = self.q_y 
- 
  
         q_y_given_x = self.q_y_given_x
         n_unsup_layers =  len(self.q_layers)
@@ -772,10 +721,7 @@ class SemiBiHM(HelmholtzMachine):
           c=  tensor.exp( c)
           class_prob.append( c )
     
- 
-    
         Classification_term = tensor.argmax(label, axis=1)- tensor.argmax(class_prob, axis=0)
-        
         Classification_term = (1.0-(abs(Classification_term)>0.0)*1.0).mean()
 	"""
         Classification_term = tensor.zeros([batch_size]).mean()
@@ -786,8 +732,6 @@ class SemiBiHM(HelmholtzMachine):
         
         w_unsup = self.unsup_importance_weights( log_p_layers_unsup,log_p_y_unsup ,log_p_h1_unsup , log_p_h2_layers_unsup , log_q_layers_unsup, log_q_y_unsup, log_q_h2_layers_unsup, batch_size,n_samples)
               
-            
-                
          
         samples_layers_q_sup =  [v.reshape((batch_size,v.shape[1]*n_samples)) for v in samples_layers_q_sup]
       
@@ -864,9 +808,6 @@ class SemiBiHM(HelmholtzMachine):
         unsup_lower_bound = unsup_lower_bound.reshape((batch_size,1))
         
         
-        
-        
-
         #w_im =   tensor.switch(mask,w_sup, w_unsup) 
         w_im = w_sup
  
@@ -906,18 +847,11 @@ class SemiBiHM(HelmholtzMachine):
  
         #all_prob = tensor.switch(mask, fake_all_prob_sup ,fake_all_prob_unsup )
    
-        
-       
-       
-        
- 
         w = w_im.reshape( (batch_size*n_samples, ) )
         w_unsup =   w_unsup.reshape( (batch_size*n_samples, ) )
         w_unsup_q = w_unsup #- w_unsup.mean()
         w_sup =      w_sup.reshape( (batch_size*n_samples, ) )
         w_sup_q = w_sup#- w_sup.mean()
- 
-    
  
         samples_y  = flatten_values(samples_y , batch_size*n_samples)
         samples_y_unsup  = flatten_values(samples_y_unsup , batch_size*n_samples)
@@ -925,17 +859,14 @@ class SemiBiHM(HelmholtzMachine):
  
         #samples_h2_layers   =  [flatten_values(samples_h2_layers[v]   , batch_size*n_samples) for v in range(len(samples_h2_layers))]
  
-        samples_layers_q_sup   =  [flatten_values(samples_layers_q_sup[v]   , batch_size*n_samples) for v in range(len(samples_layers_q_sup))]
-        samples_h2_layers_unsup   =  [flatten_values(samples_h2_layers_unsup[v]   , batch_size*n_samples) for v in range(len(samples_h2_layers_unsup))]
-        samples_h2_layers_sup   =  [flatten_values(samples_h2_layers_sup[v]   , batch_size*n_samples) for v in range(len(samples_h2_layers_sup))]
+        samples_layers_q_sup    = [flatten_values(samples_layers_q_sup[v]   , batch_size*n_samples) for v in range(len(samples_layers_q_sup))]
+        samples_h2_layers_unsup = [flatten_values(samples_h2_layers_unsup[v]   , batch_size*n_samples) for v in range(len(samples_h2_layers_unsup))]
+        samples_h2_layers_sup   = [flatten_values(samples_h2_layers_sup[v]   , batch_size*n_samples) for v in range(len(samples_h2_layers_sup))]
         
         
         gradients_unsup = OrderedDict()
- 
         for l in xrange(n_unsup_layers ):
-             
             gradients_unsup = merge_gradients(gradients_unsup, p_layers[l].get_gradients_list_h1( samples_layers_q_sup[l], samples_layers_q_sup[l+1], weights=[w_unsup,w_sup ], alpha = alpha , beta = beta ,gamma=gamma))
-           
             gradients_unsup = merge_gradients(gradients_unsup, q_layers[l].get_gradients_list_h1( samples_layers_q_sup[l+1], samples_layers_q_sup[l], weights=[w_unsup_q ,w_sup_q  ], alpha = alpha , beta = beta ,gamma=gamma))
  
         cc = tensor.concatenate([samples_h2_layers_sup[0],samples_y_sup ], axis=1)
@@ -943,26 +874,22 @@ class SemiBiHM(HelmholtzMachine):
      
  
         gradients_unsup = merge_gradients(gradients_unsup, p_h1.get_gradients_list(samples_layers_q_sup[n_unsup_layers], cc_un,samples_layers_q_sup[n_unsup_layers], 
-                                          cc,
-                                               weights=[w_unsup,w_sup ], alpha = alpha , beta = beta ,gamma=gamma))
+                                          cc,weights=[w_unsup,w_sup ], alpha=alpha, beta=beta ,gamma=gamma))
  
         gradients_sup = OrderedDict()
         if n_sup_layers ==2:
- 
-          gradients_sup = merge_gradients(gradients_sup, p_h2_layers[0].get_gradients_list(samples_h2_layers_unsup[0], samples_h2_layers_unsup[1],samples_h2_layers_sup[0], samples_h2_layers_sup[1], weights=[w_unsup,w_sup ], alpha = alpha , beta = beta ,gamma=gamma))
+            gradients_sup = merge_gradients(gradients_sup, p_h2_layers[0].get_gradients_list(samples_h2_layers_unsup[0], samples_h2_layers_unsup[1],samples_h2_layers_sup[0], samples_h2_layers_sup[1], weights=[w_unsup,w_sup ], alpha = alpha , beta = beta ,gamma=gamma))
  
         gradients_sup = merge_gradients(gradients_sup, q_h2_layers[0].get_gradients_list( samples_h2_layers_unsup[0], 
-                                         tensor.concatenate([samples_layers_q_sup[n_unsup_layers],samples_y_unsup], axis =1 ),
-                                         samples_h2_layers_sup[0], 
+                                        tensor.concatenate([samples_layers_q_sup[n_unsup_layers],samples_y_unsup], axis =1 ),
+                                        samples_h2_layers_sup[0], 
                                         tensor.concatenate([samples_layers_q_sup[n_unsup_layers],samples_y_sup], axis =1 ), weights=[w_unsup_q ,w_sup_q  ], alpha = alpha , beta = beta ,gamma=gamma))                                        
          
         gradients_sup = merge_gradients(gradients_sup, p_y.get_gradients_list(samples_y_unsup,samples_y_sup, weights=[w_unsup,w_sup ],  alpha = alpha , beta = beta ,gamma=gamma))               
-        
         gradients_sup = merge_gradients(gradients_sup, q_y.get_gradients_list_h1_type3(samples_y_unsup, samples_y_sup, samples_layers_q_sup[n_unsup_layers] , weights=[w_unsup   ,w_sup  ],  alpha = alpha , beta = beta ,gamma=gamma,expectation_term =True))   
     
     
         for l in xrange(1,n_sup_layers):
- 
             gradients_sup = merge_gradients(gradients_sup, p_h2_layers[l-1].get_gradients_list(samples_h2_layers_unsup[l-1], samples_h2_layers_unsup[l],samples_h2_layers_sup[l-1], samples_h2_layers_sup[l ], weights=[w_unsup,w_sup ], alpha = alpha , beta = beta ,gamma=gamma))
             gradients_sup = merge_gradients(gradients_sup, q_h2_layers[l].get_gradients_list(samples_h2_layers_unsup[l], samples_h2_layers_unsup[l-1],samples_h2_layers_sup[l], samples_h2_layers_sup[l-1], weights=[w_unsup_q ,w_sup_q  ], alpha = alpha , beta = beta ,gamma=gamma))
         
@@ -973,7 +900,3 @@ class SemiBiHM(HelmholtzMachine):
         gradients = merge_gradients(gradients_unsup, gradients_sup) 
  
         return  expectation, Classification_term,log_q_y_sup[0], log_q_y_unsup[0], sup_lower_bound , 0.5*unsup_lower_bound, Objective_function, total_lower_bound, gradients 
-        
- 
-
- 

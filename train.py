@@ -205,9 +205,9 @@ def main(args):
 
     #------------------------------------------------------------
 
-    x = tensor.matrix('features')
+    x = tensor.matrix('features').astype('float32')
     x = x.reshape((args.batch_size,x_dim ))
-    y = tensor.matrix('targets' ).astype('int32')
+    y = tensor.matrix('targets' ).astype('float32')
     y = y.reshape((args.batch_size,y_dim ))
 
     mask = np.ones((args.batch_size,1)).astype('int32')# tensor.col('mask', dtype='int32')
@@ -221,8 +221,7 @@ def main(args):
     test_monitors = []
     for s in [1, 10, 100, 1000]:
         lower_bound = model.log_likelihood(x, y, s, mask )
-        lower_bound  = lower_bound.mean()
-        lower_bound.name  = "lower_bound_%d" % s
+        lower_bound = named(lower_bound.mean(), "lower_bound_%d" % s)
 
         test_monitors.append(lower_bound)
 
@@ -248,20 +247,21 @@ def main(args):
         valid_monitors += [log_p_bound, named(model.kl_term.mean(), 'kl_term'), named(model.recons_term.mean(), 'recons_term')]
         test_monitors  += [log_p_bound, named(model.kl_term.mean(), 'kl_term'), named(model.recons_term.mean(), 'recons_term')]
     elif args.method == 'semi-bihm':
-	expectation, accuracy,log_q_y_sup , log_q_y_unsup, sup_lower_bound , unsup_lower_bound, cost, total_lower_bound, gradients = \
+        expectation, accuracy,log_q_y_sup , log_q_y_unsup, sup_lower_bound , unsup_lower_bound, cost, total_lower_bound, gradients = \
 	    model.get_gradients(x,  y, args.n_samples , mask)
 
-	cost = -cost.mean()
-	sup_lower_bound= named( -sup_lower_bound.mean(), "sup_lower_bound")
-	unsup_lower_bound = named( -unsup_lower_bound.mean(), "unsup_lower_bound")
-	log_q_y_sup = named( -log_q_y_sup.mean(), "log_q_y_sup")
-	log_q_y_unsup = named( -log_q_y_unsup.mean(), "log_q_y_unsup")
-	expectation= named( -expectation.mean(), "expectation")
-	total_lower_bound= named( -total_lower_bound.mean(), "total_lower_bound")
-	accuracy .name  = "accuracy"
+        expectation        = named(-expectation.mean(), "expectation")
+        accuracy           = named( accuracy, "accuracy")
+        log_q_y_sup        = named(-log_q_y_sup.mean(), "log_q_y_sup")
+        log_q_y_unsup      = named(-log_q_y_unsup.mean(), "log_q_y_unsup")
+        sup_lower_bound    = named(-sup_lower_bound.mean(), "sup_lower_bound")
+        unsup_lower_bound  = named(-unsup_lower_bound.mean(), "unsup_lower_bound")
+        cost               = named(-cost.mean(), "cost")
+        total_lower_bound  = named(-total_lower_bound.mean(), "total_lower_bound")
 
-	train_monitors = [expectation, accuracy,log_q_y_sup , log_q_y_unsup, sup_lower_bound , unsup_lower_bound, cost, total_lower_bound]
-	valid_monitors = [expectation, accuracy,log_q_y_sup , log_q_y_unsup, sup_lower_bound , unsup_lower_bound, cost, total_lower_bound]
+        train_monitors = [expectation, accuracy, log_q_y_sup , log_q_y_unsup, sup_lower_bound , unsup_lower_bound, cost, total_lower_bound]
+        valid_monitors = []
+        #valid_monitors = [expectation, accuracy,log_q_y_sup , log_q_y_unsup, sup_lower_bound , unsup_lower_bound, cost, total_lower_bound]
     else:
         log_p, log_ph, gradients = model.get_gradients(x, args.n_samples)
         log_p  = -log_p.mean()

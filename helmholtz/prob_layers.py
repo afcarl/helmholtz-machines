@@ -252,7 +252,7 @@ class BernoulliTopLayer(Initializable, ProbabilisticTopLayer):
     @application(inputs=[], outputs=['X_expected'])
     def sample_expected(self):
         b = self.parameters[0]
-        return tensor.nnet.sigmoid(b).clip(self.sigmoid_frindge, 1.-self.sigmoid_frindge)
+        return tensor.nnet.sigmoid(b) #.clip(self.sigmoid_frindge, 1.-self.sigmoid_frindge)
 
     @application(outputs=['X', 'log_prob'])
     def sample(self, n_samples):
@@ -282,7 +282,7 @@ class BernoulliLayer(Initializable, ProbabilisticLayer):
 
     @application(inputs=['Y'], outputs=['X_expected'])
     def sample_expected(self, Y):
-        return self.mlp.apply(Y).clip(self.sigmoid_frindge, 1.-self.sigmoid_frindge)
+        return self.mlp.apply(Y) #.clip(self.sigmoid_frindge, 1.-self.sigmoid_frindge)
 
     @application(inputs=['Y'], outputs=['X', 'log_prob'])
     def sample(self, Y):
