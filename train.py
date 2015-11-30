@@ -183,7 +183,7 @@ def main(args):
         while len(model.parents) > 0:
             model = model.parents[0]
 
-        assert isinstance(model, (BiHM, ReweightedWakeSleep, DVAE, VAE))
+        assert isinstance(model, (BiHM, ReweightedWakeSleep, VAE))
 
         mname, _, _ = basename(args.model_file).rpartition("_model.pkl")
         name = "%s-cont-%s-lr%s-spl%s" % (mname, args.name, lr_tag, args.n_samples)

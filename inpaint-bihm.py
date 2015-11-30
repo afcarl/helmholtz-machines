@@ -238,7 +238,7 @@ if __name__ == "__main__":
     n_inner = tensor.iscalar('n_inner')
     x = tensor.fmatrix('x')
     mask = tensor.fmatrix('mask')
-    n_iter = 1000
+    n_iter = 500
 
     #----------------------------------------------------------------------
     logger.info("Compiling even/odd-sampling...")
