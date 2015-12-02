@@ -212,6 +212,16 @@ def main(args):
         test_monitors += [log_p, log_ph]
 
     #------------------------------------------------------------
+    # Z estimation
+    #for s in [100000]:
+    #    z2 = tensor.exp(model.estimate_log_z2(s)) / s
+    #    z2.name = "z2_%d" % s
+    #
+    #    valid_monitors += [z2]
+    #    test_monitors += [z2]
+
+
+    #------------------------------------------------------------
     # Gradient and training monitoring
 
     if args.method in ['vae', 'dvae']:
