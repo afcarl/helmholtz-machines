@@ -51,7 +51,8 @@ from blocks_extras.extensions.display import ImageDataStreamDisplay, WeightDispl
 import helmholtz.datasets as datasets
 
 from helmholtz import create_layers, create_semi_layers
-from helmholtz.bihm import BiHM
+from helmholtz.supervised_bihm import Supervised_BiHM
+from helmholtz.semibihm import SemiBiHM
 from helmholtz.dvae import DVAE
 from helmholtz.rws import ReweightedWakeSleep
 from helmholtz.vae import VAE
@@ -177,10 +178,18 @@ def main(args):
 
 	p_y, p_h1, p_h2_layers, p_layers, q_layers, q_y , q_h2_layers, q_y_given_x = \
 	    create_semi_layers(args.supervised_layer_size, args.UNsupervised_layer_size, data_dim=x_dim, y_dim=y_dim)
-    
-      	sup_size = [int(i) for i in args.supervised_layer_size.split(",")]
+        if supervised_layer_size == "":
+           sup_size = [] 
+           
+        else:  
+            sup_size = [int(i) for i in args.supervised_layer_size.split(",")]
 	unsup_size = [int(i) for i in args.UNsupervised_layer_size.split(",")]
-        model = SemiBiHM(p_y, p_h1, p_h2_layers, p_layers, q_layers, q_y , q_h2_layers, q_y_given_x , x_dim,    y_dim,  sup_size, unsup_size   )
+        if supervised_layer_size == "":
+     
+           model = Supervised_BiHM(p_y, p_h1,   p_layers, q_layers, q_y ,  q_y_given_x , x_dim,    y_dim,  sup_size, unsup_size   )
+        else:  
+      
+           model =  SemiBiHM(p_y, p_h1, p_h2_layers, p_layers, q_layers, q_y , q_h2_layers, q_y_given_x  , x_dim,    y_dim,  sup_size, unsup_size   )
 	model.initialize()
     elif args.method == 'continue':
         import cPickle as pickle
@@ -221,7 +230,7 @@ def main(args):
     test_monitors = []
     for s in [1, 10, 100, 1000]:
         lower_bound = model.log_likelihood(x, y, s, mask )
-        lower_bound = named(lower_bound.mean(), "lower_bound_%d" % s)
+        lower_bound = named(-lower_bound.mean(), "lower_bound_%d" % s)
 
         test_monitors.append(lower_bound)
 
@@ -260,8 +269,8 @@ def main(args):
         total_lower_bound  = named(-total_lower_bound.mean(), "total_lower_bound")
 
         train_monitors = [expectation, accuracy, log_q_y_sup , log_q_y_unsup, sup_lower_bound , unsup_lower_bound, cost, total_lower_bound]
-        valid_monitors = []
-        #valid_monitors = [expectation, accuracy,log_q_y_sup , log_q_y_unsup, sup_lower_bound , unsup_lower_bound, cost, total_lower_bound]
+        #valid_monitors = []
+        valid_monitors = [expectation, accuracy,log_q_y_sup , log_q_y_unsup, sup_lower_bound , unsup_lower_bound, cost, total_lower_bound]
     else:
         log_p, log_ph, gradients = model.get_gradients(x, args.n_samples)
         log_p  = -log_p.mean()
@@ -401,7 +410,8 @@ def main(args):
                     #    after_batch=False,
                     #    every_n_epochs=half_lr),
                     TrackTheBest('valid_%s' % cost.name),
-                    Checkpoint(name+".pkl", save_separately=['log', 'model']),
+                    TrackTheBest('train_%s' % cost.name),
+                    Checkpoint(name+".pkl", save_separately=['log'], use_cpickle=True),
                     FinishIfNoImprovementAfter('valid_%s_best_so_far' % cost.name, epochs=args.patience),
                     FinishAfter(after_n_epochs=args.max_epochs),
                     Printing()] + plotting_extensions)
@@ -493,10 +503,12 @@ if __name__ == "__main__":
                 default=10, help="Number of IS samples")
     subparser.add_argument("--deterministic-layers", type=int, dest="deterministic_layers",
                 default=0, help="Deterministic hidden layers per stochastic layer")
-    subparser.add_argument("UNsupervised_layer_size", type=str,
-                default="200,200,200", help="Comma seperated list of unsupervised layer sizes")
-    subparser.add_argument("supervised_layer_size", type=str,
-                default="200,200,200", help="Comma seperated list of supervised layer sizes")
+
+    subparser.add_argument("--supervised_layer_size", type=str,  dest="supervised_layer_size",
+                default="", help="Comma seperated list of supervised layer sizes")
+
+    subparser.add_argument("UNsupervised_layer_size",  type=str,
+                default="200,200,200", help="Comma seperated list of unsupervised layer sizes")  
     args = parser.parse_args()
     
     main(args)

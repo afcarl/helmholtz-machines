@@ -198,7 +198,7 @@ class SemiBiHM(HelmholtzMachine):
         return samples_y,samples_layers, samples_h2,log_p_layers,log_p_y, log_p_h2_layers, log_q_layers, log_q_y, log_q_h2_layers
  
 
-    def sample_q_unsup(self, features, n_samples, samples_h1):
+    def sample_q_unsup(self, features, n_samples, samples_h1, label): #Todo
         n_unsup_layers = len(self.q_layers)
         n_sup_layers =  len(self.p_h2_layers) 
      
@@ -212,7 +212,7 @@ class SemiBiHM(HelmholtzMachine):
         q_y = self.q_y 
         
       
-        samples_y =   []
+        samples_y = label# [] #Todo
         samples_layers = samples_h1 
         samples_h2_layers = [None] * n_sup_layers
  
@@ -228,7 +228,8 @@ class SemiBiHM(HelmholtzMachine):
         log_q_layers[0] = tensor.zeros([batch_size])
         for l in xrange(n_unsup_layers):
             _, log_q_layers[l+1] = q_layers[l].sample(samples_layers[l]) 
-        samples_y, log_q_y = q_y.sample(samples_layers[n_unsup_layers])
+        #samples_y, log_q_y = q_y.sample(samples_layers[n_unsup_layers])
+        _, log_q_y = q_y.sample(samples_layers[n_unsup_layers]) #Todo
  
         samples_h2_layers[0], log_q_h2_layers[0] = q_h2_layers[0].sample_concatenate(samples_layers[n_unsup_layers],samples_y)
         for l in xrange(n_sup_layers-1):
@@ -727,7 +728,7 @@ class SemiBiHM(HelmholtzMachine):
         Classification_term = tensor.zeros([batch_size]).mean()
 
         # Sample from Q for unsupervise case ##########################################################################################
-        samples_y_unsup, samples_h2_layers_unsup, log_p_layers_unsup, log_p_y_unsup ,log_p_h1_unsup , log_p_h2_layers_unsup, log_q_layers_unsup, log_q_y_unsup, log_q_h2_layers_unsup = self.sample_q_unsup ( x, n_samples, samples_layers_q_sup)
+        samples_y_unsup, samples_h2_layers_unsup, log_p_layers_unsup, log_p_y_unsup ,log_p_h1_unsup , log_p_h2_layers_unsup, log_q_layers_unsup, log_q_y_unsup, log_q_h2_layers_unsup = self.sample_q_unsup ( x, n_samples, samples_layers_q_sup,y)
  
         
         w_unsup = self.unsup_importance_weights( log_p_layers_unsup,log_p_y_unsup ,log_p_h1_unsup , log_p_h2_layers_unsup , log_q_layers_unsup, log_q_y_unsup, log_q_h2_layers_unsup, batch_size,n_samples)
@@ -803,7 +804,7 @@ class SemiBiHM(HelmholtzMachine):
             prob_q_h2_layes_unsup = p + prob_q_h2_layes_unsup
         
  
-        fake_all_prob_unsup = (1./2.)*(prob_layes_unsup + prob_h2_layes_unsup+ log_p_y_unsup + log_p_h1_unsup  -log_q_y_unsup - prob_q_layes_unsup - prob_q_h2_layes_unsup  )
+        fake_all_prob_unsup = (1./2.)*(prob_layes_unsup + prob_h2_layes_unsup+ log_p_y_unsup + log_p_h1_unsup -log_q_y_unsup - prob_q_layes_unsup - prob_q_h2_layes_unsup  ) 
         unsup_lower_bound = 2.*logsumexp(fake_all_prob_unsup, axis=-1 ) -2.*tensor.log(n_samples )
         unsup_lower_bound = unsup_lower_bound.reshape((batch_size,1))
         
@@ -835,7 +836,7 @@ class SemiBiHM(HelmholtzMachine):
         expectation_sup =  log_q_y_sup[0].reshape((batch_size, n_samples)).mean( axis=1).reshape((batch_size,1))
    
         fake_all_prob_sup  =  0.5*(prob_layes_sup + prob_h2_layes_sup+ log_p_y_sup + log_p_h1_sup +log_q_y_sup - prob_q_layes_sup - prob_q_h2_layes_sup  )
-        sup_lower_bound =  logsumexp( fake_all_prob_sup, axis=-1 ) -tensor.log(n_samples ) #HAZF
+        sup_lower_bound =  logsumexp( fake_all_prob_sup, axis=-1 ) -tensor.log(n_samples )     
         sup_lower_bound = sup_lower_bound.reshape((batch_size,1))
      
         alpha = 1.
