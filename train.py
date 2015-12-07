@@ -186,7 +186,7 @@ def main(args):
         while len(model.parents) > 0:
             model = model.parents[0]
 
-        assert isinstance(model, (BiHM, ReweightedWakeSleep, DVAE, VAE))
+        assert isinstance(model, (BiHM, ReweightedWakeSleep, VAE))
 
         mname, _, _ = basename(args.model_file).rpartition("_model.pkl")
         name = "%s-cont-%s-lr%s-spl%s" % (mname, args.name, lr_tag, args.n_samples)
@@ -213,6 +213,16 @@ def main(args):
         #train_monitors += [log_p, log_ph]
         #valid_monitors += [log_p, log_ph]
         test_monitors += [log_p, log_ph]
+
+    #------------------------------------------------------------
+    # Z estimation
+    #for s in [100000]:
+    #    z2 = tensor.exp(model.estimate_log_z2(s)) / s
+    #    z2.name = "z2_%d" % s
+    #
+    #    valid_monitors += [z2]
+    #    test_monitors += [z2]
+
 
     #------------------------------------------------------------
     # Gradient and training monitoring

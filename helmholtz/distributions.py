@@ -82,6 +82,8 @@ def replace_bernoulli_op(node):
 
     prob = node.inputs[0]
     noise = node.inputs[1]
+
+    
     
     samples = (noise < prob).astype(floatX)
     

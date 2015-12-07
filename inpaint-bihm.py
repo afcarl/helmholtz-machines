@@ -238,7 +238,7 @@ if __name__ == "__main__":
     n_inner = tensor.iscalar('n_inner')
     x = tensor.fmatrix('x')
     mask = tensor.fmatrix('mask')
-    n_iter = 1000
+    n_iter = 500
 
     #----------------------------------------------------------------------
     logger.info("Compiling even/odd-sampling...")
@@ -325,9 +325,27 @@ if __name__ == "__main__":
     sel = [20, 32, 54, 15, 57, 6, 2, 1, 0, 111] #] 102, 111, 543, 234, 111] #0, 1, 2, 6, 12, 15, 16, 17, 18, 20, 22]
 
 
+    import pylab
+    pylab.figure()
+
     progress = ProgressBar()
     for n in progress(xrange(n_examples)):
         features = data_train.get_data(None, sel[n // 10])[0]
+
+        """
+        x = features.reshape(28, 28)
+
+        fname = os.path.splitext(args.experiment)[0]
+        fname += "-inpaint.pdf"
+
+        pylab.subplot(10, 10, n+1)
+        pylab.gray()
+        pylab.axis('off')
+        pylab.imshow(x, interpolation='nearest')
+ 
+    pylab.savefig(fname)
+        """
+
         features = features.reshape((1, x_dim))
 
         noise = 0.5*np.ones_like(features)

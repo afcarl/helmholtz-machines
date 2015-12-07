@@ -32,11 +32,11 @@ from helmholtz.gmm import GMM
 from helmholtz.rws import ReweightedWakeSleep
 from helmholtz.vae import VAE
 
-logger = logging.getLogger("sample.py")
+logger = logging.getLogger("est-kl.py")
 
 FORMAT = '[%(asctime)s] %(name)-15s %(message)s'
 DATEFMT = "%H:%M:%S"
-logging.basicConfig(format=FORMAT, datefmt=DATEFMT, level=logging.INFO)
+logging.basicConfig(format=FORMAT, datefmt=DATEFMT, level=logging.ERROR)
 
 #-----------------------------------------------------------------------------
 
@@ -45,7 +45,7 @@ if __name__ == "__main__":
     parser.add_argument("--data", "-d", dest='data', choices=datasets.supported_datasets,
                 default='bmnist', help="Dataset to use")
     parser.add_argument("--nsamples", "--samples", "-s", type=int, 
-            default=1000, help="no. of samples")
+            default=10000, help="no. of samples")
     parser.add_argument("experiment", help="Experiment to load")
     args = parser.parse_args()
 
@@ -118,9 +118,6 @@ if __name__ == "__main__":
         total_kl = np.concatenate([total_kl, total_kl_batch])
         for l, kl_batch in enumerate(layer_kl_batch):
             layer_kl[l] = np.concatenate([layer_kl[l], kl_batch])
-
-    print(total_kl.shape)
-    print(log_px.shape)
 
     print("log p(x): %f +-%f (std: %f)" % (log_px.mean(), stats.sem(log_px), np.std(log_px)))
     print("KL(q|p) : %f +-%f (std: %f)" % (total_kl.mean(), stats.sem(total_kl), np.std(total_kl)))

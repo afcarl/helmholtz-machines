@@ -22,9 +22,9 @@ floatX = theano.config.floatX
 
 N_STREAMS = 2048
 
+sigmoid_frindge = 1e-6
  
 #-----------------------------------------------------------------------------
-
 
 class ProbabilisticTopLayer(Random):
     def __init__(self, **kwargs):
@@ -85,11 +85,9 @@ class ProbabilisticLayer(Random):
 
 #-----------------------------------------------------------------------------
 
-
 class BernoulliTopLayer(Initializable, ProbabilisticTopLayer):
     def __init__(self, dim_X, biases_init, **kwargs):
         super(BernoulliTopLayer, self).__init__(**kwargs)
-        self.sigmoid_frindge = 1e-6
         self.dim_X = dim_X
         self.biases_init = biases_init
 
@@ -106,7 +104,7 @@ class BernoulliTopLayer(Initializable, ProbabilisticTopLayer):
     @application(inputs=[], outputs=['X_expected'])
     def sample_expected(self):
         b = self.parameters[0]
-        return tensor.nnet.sigmoid(b).clip(self.sigmoid_frindge, 1.-self.sigmoid_frindge)
+        return tensor.nnet.sigmoid(b).clip(sigmoid_frindge, 1.-sigmoid_frindge)
 
     @application(outputs=['X', 'log_prob'])
     def sample(self, n_samples):
@@ -130,13 +128,12 @@ class BernoulliLayer(Initializable, ProbabilisticLayer):
 
         self.dim_X = mlp.output_dim
         self.dim_Y = mlp.input_dim
-        self.sigmoid_frindge = 1e-6
 
         self.children = [self.mlp]
 
     @application(inputs=['Y'], outputs=['X_expected'])
     def sample_expected(self, Y):
-        return self.mlp.apply(Y).clip(self.sigmoid_frindge, 1.-self.sigmoid_frindge)
+        return self.mlp.apply(Y).clip(sigmoid_frindge, 1.-sigmoid_frindge)
 
     @application(inputs=['Y'], outputs=['X', 'log_prob'])
     def sample(self, Y):
