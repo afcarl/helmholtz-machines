@@ -25,8 +25,10 @@ floatX = theano.config.floatX
 
 
 class ReweightedWakeSleep(HelmholtzMachine):
-    def __init__(self, p_layers, q_layers, **kwargs):
+    def __init__(self, p_layers, q_layers, qbaseline=True, **kwargs):
         super(ReweightedWakeSleep, self).__init__(p_layers, q_layers, **kwargs)
+
+        self.qbaseline = qbaseline
 
     def log_prob_p(self, samples):
         """Calculate p(h_l | h_{l+1}) for all layers. """
@@ -182,20 +184,25 @@ class ReweightedWakeSleep(HelmholtzMachine):
         log_p_all = sum(log_p)
         log_q_all = sum(log_q)
 
-        # Approximate log p(x) and calculate IS weights
-        w = self.importance_weights(log_p, log_q)
-
         # Approximate log(p(x))
         log_px  = logsumexp(log_p_all-log_q_all, axis=-1) - tensor.log(n_samples)
 
-        w = w.reshape( (batch_size*n_samples, ) )
+        # Approximate log p(x) and calculate IS weights
+        w = self.importance_weights(log_p, log_q)
+
+        qbaseline = 0.
+        if self.qbaseline:
+            qbaseline = 1./n_samples
+
         samples = flatten_values(samples, batch_size*n_samples)
+        wp = w.reshape( (batch_size*n_samples, ) )
+        wq = w.reshape( (batch_size*n_samples, ) ) - qbaseline
 
         gradients = OrderedDict()
         for l in xrange(n_layers-1):
-            gradients = merge_gradients(gradients, p_layers[l].get_gradients(samples[l], samples[l+1], weights=w))
-            gradients = merge_gradients(gradients, q_layers[l].get_gradients(samples[l+1], samples[l], weights=w), 0.5)
-        gradients = merge_gradients(gradients, p_layers[-1].get_gradients(samples[-1], weights=w))
+            gradients = merge_gradients(gradients, p_layers[l].get_gradients(samples[l], samples[l+1], weights=wp))
+            gradients = merge_gradients(gradients, q_layers[l].get_gradients(samples[l+1], samples[l], weights=wq), 0.5)
+        gradients = merge_gradients(gradients, p_layers[-1].get_gradients(samples[-1], weights=wp))
 
         # Now sleep phase..
         samples, log_p, log_q = self.sample_p(batch_size)

@@ -138,8 +138,10 @@ def main(args):
         model.initialize()
     elif args.method == 'rws':
         sizes_tag = args.layer_spec.replace(",", "-")
-        name = "%s-%s-%s-lr%s-dl%d-spl%d-%s" % \
-            (args.data, args.method, args.name, lr_tag, args.deterministic_layers, args.n_samples, sizes_tag)
+        qbase = "" if not args.no_qbaseline else "noqb-"
+
+        name = "%s-%s-%s-%slr%s-dl%d-spl%d-%s" % \
+            (args.data, args.method, args.name, qbase, lr_tag, args.deterministic_layers, args.n_samples, sizes_tag)
 
         p_layers, q_layers = create_layers(
                                 args.layer_spec, x_dim,
@@ -149,6 +151,7 @@ def main(args):
         model = ReweightedWakeSleep(
                 p_layers,
                 q_layers,
+                qbaseline=(not args.no_qbaseline),
             )
         model.initialize()
     elif args.method == 'bihm-rws':
@@ -427,6 +430,8 @@ if __name__ == "__main__":
                 help="Reweighted Wake-Sleep")
     subparser.add_argument("--nsamples", "-s", type=int, dest="n_samples",
                 default=10, help="Number of IS samples")
+    subparser.add_argument("--no-qbaseline", "--nobase", action="store_true",
+                default=False, help="Deactivate 1/n_samples baseline for Q gradients")
     subparser.add_argument("--deterministic-layers", type=int, dest="deterministic_layers",
                 default=0, help="Deterministic hidden layers per stochastic layer")
     subparser.add_argument("layer_spec", type=str,
