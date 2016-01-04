@@ -31,7 +31,7 @@ from fuel.streams import DataStream
 from fuel.transformers import Flatten
 
 from blocks.algorithms import GradientDescent, CompositeRule, StepClipping, RemoveNotFinite, Momentum, RMSProp, Adam
-from blocks.bricks import Tanh, Logistic, Rectifier
+from blocks.bricks import MLP, Tanh, Logistic, Rectifier
 from blocks.extensions import FinishAfter, Timing, Printing, ProgressBar
 from blocks.extensions.stopping import FinishIfNoImprovementAfter
 from blocks.extensions.saveload import Checkpoint
@@ -51,12 +51,13 @@ from blocks_extras.extensions.display import ImageDataStreamDisplay, WeightDispl
 import helmholtz.datasets as datasets
 
 from helmholtz import create_layers, create_semi_layers
-from helmholtz.supervised_bihm import Supervised_BiHM
 from helmholtz.semibihm import SemiBiHM
 from helmholtz.dvae import DVAE
 from helmholtz.rws import ReweightedWakeSleep
 from helmholtz.vae import VAE
-from helmholtz.semibihm import SemiBiHM
+
+from helmholtz.prob_layers import MultinomialLayer, MultinomialTopLayer
+from blocks.initialization import Uniform, IsotropicGaussian, Constant, Sparse 
 
 floatX = theano.config.floatX
 fuel.config.floatX = floatX
@@ -77,14 +78,9 @@ def float_tag(value):
     leading = ("%e"%value)[0]
     return "%s%d" % (leading, -exp)
 
-
 def named(var, name):
     var.name = name
     return var
-
-#-----------------------------------------------------------------------------
-def vae_training():
-    return cost, train_monitors, valid_monitors, test_monitors
 
 #-----------------------------------------------------------------------------
 def main(args):
@@ -92,6 +88,7 @@ def main(args):
     lr_tag = float_tag(args.learning_rate)
 
     x_dim, y_dim, train_stream, valid_stream, test_stream = datasets.get_streams(args.data, args.batch_size)
+    print(train_stream.sources)
 
     #------------------------------------------------------------
     # Setup model
@@ -171,26 +168,30 @@ def main(args):
             )
         model.initialize()
     elif args.method == 'semi-bihm':
-        supervised_layer_size = args.supervised_layer_size.replace(",", "-")
-        UNsupervised_layer_size = args.UNsupervised_layer_size.replace(",", "-")
-        name = "%s-%s-%s-lr%s-dl%d-spl%d" % \
-            (args.method, args.data, args.name, lr_tag, args.deterministic_layers, args.n_samples) + "-"+args.UNsupervised_layer_size + "-"+args.supervised_layer_size
+        sizes_tag = args.layer_spec.replace(",", "-")
+        name = "%s-%s-%s-lr%s-dl%d-spl%d-%s" % \
+            (args.data, args.method, args.name, lr_tag, args.deterministic_layers, args.n_samples, sizes_tag)
 
-	p_y, p_h1, p_h2_layers, p_layers, q_layers, q_y , q_h2_layers, q_y_given_x = \
-	    create_semi_layers(args.supervised_layer_size, args.UNsupervised_layer_size, data_dim=x_dim, y_dim=y_dim)
-        if supervised_layer_size == "":
-           sup_size = [] 
-           
-        else:  
-            sup_size = [int(i) for i in args.supervised_layer_size.split(",")]
-	unsup_size = [int(i) for i in args.UNsupervised_layer_size.split(",")]
-        if supervised_layer_size == "":
-     
-           model = Supervised_BiHM(p_y, p_h1,   p_layers, q_layers, q_y ,  q_y_given_x , x_dim,    y_dim,  sup_size, unsup_size   )
-        else:  
-      
-           model =  SemiBiHM(p_y, p_h1, p_h2_layers, p_layers, q_layers, q_y , q_h2_layers, q_y_given_x  , x_dim,    y_dim,  sup_size, unsup_size   )
-	model.initialize()
+        # create SBN layers
+        bottom_p, bottom_q = create_layers(
+                                args.layer_spec, x_dim,
+                                args.deterministic_layers,
+                                deterministic_act, deterministic_size)
+
+        # replace the top-most Q layer with a conditional categorical distribution
+        inits = {
+            'weights_init': IsotropicGaussian(),
+            'biases_init': Constant(0.0),
+        }
+        #bottom_q[-1] = MultinomialLayer(MLP([Logistic()], [25, 10], **inits))
+
+        top_p = bottom_p[-1]
+        del bottom_p[-1]                          # remove the top layer P layer
+        #top_p = MultinomialTopLayer(10, **inits)  # create top level P prior
+        
+
+        model = SemiBiHM(bottom_p, bottom_q, top_p)
+        model.initialize()
     elif args.method == 'continue':
         import cPickle as pickle
         from os.path import basename, splitext
@@ -216,7 +217,7 @@ def main(args):
 
     x = tensor.matrix('features').astype('float32')
     x = x.reshape((args.batch_size,x_dim ))
-    y = tensor.matrix('targets' ).astype('float32')
+    y = tensor.matrix('targets').astype('float32')
     y = y.reshape((args.batch_size,y_dim ))
 
     mask = np.ones((args.batch_size,1)).astype('int32')# tensor.col('mask', dtype='int32')
@@ -229,10 +230,12 @@ def main(args):
     valid_monitors = []
     test_monitors = []
     for s in [1, 10, 100, 1000]:
-        lower_bound = model.log_likelihood(x, y, s, mask )
-        lower_bound = named(-lower_bound.mean(), "lower_bound_%d" % s)
+        log_px, log_pygx = model.log_likelihood(x, y, mask, s)
 
-        test_monitors.append(lower_bound)
+        log_px   = named(-log_px.mean(), "log_px_%d" % s)
+        log_pygx = named(-log_pygx.sum() / mask.sum(), "log_pygx_%d" % s)
+
+        test_monitors += [log_px, log_pygx]
 
 	### Jorgs old stuff ###
         # log_p, log_ph = model.log_likelihood(x, s)
@@ -256,21 +259,14 @@ def main(args):
         valid_monitors += [log_p_bound, named(model.kl_term.mean(), 'kl_term'), named(model.recons_term.mean(), 'recons_term')]
         test_monitors  += [log_p_bound, named(model.kl_term.mean(), 'kl_term'), named(model.recons_term.mean(), 'recons_term')]
     elif args.method == 'semi-bihm':
-        expectation, accuracy,log_q_y_sup , log_q_y_unsup, sup_lower_bound , unsup_lower_bound, cost, total_lower_bound, gradients = \
-	    model.get_gradients(x,  y, args.n_samples , mask)
+        gradients, log_px, log_pygx = model.get_gradients(x, y, mask, args.n_samples)
 
-        expectation        = named(-expectation.mean(), "expectation")
-        accuracy           = named( accuracy, "accuracy")
-        log_q_y_sup        = named(-log_q_y_sup.mean(), "log_q_y_sup")
-        log_q_y_unsup      = named(-log_q_y_unsup.mean(), "log_q_y_unsup")
-        sup_lower_bound    = named(-sup_lower_bound.mean(), "sup_lower_bound")
-        unsup_lower_bound  = named(-unsup_lower_bound.mean(), "unsup_lower_bound")
-        cost               = named(-cost.mean(), "cost")
-        total_lower_bound  = named(-total_lower_bound.mean(), "total_lower_bound")
+        log_px   = named(-log_px.mean(), "log_px")
+        log_pygx = named(-log_pygx.sum() / mask.sum(), "log_pygx")
+        cost = log_pygx
 
-        train_monitors = [expectation, accuracy, log_q_y_sup , log_q_y_unsup, sup_lower_bound , unsup_lower_bound, cost, total_lower_bound]
-        #valid_monitors = []
-        valid_monitors = [expectation, accuracy,log_q_y_sup , log_q_y_unsup, sup_lower_bound , unsup_lower_bound, cost, total_lower_bound]
+        train_monitors = [log_px, log_pygx]
+        valid_monitors = [log_px, log_pygx]
     else:
         log_p, log_ph, gradients = model.get_gradients(x, args.n_samples)
         log_p  = -log_p.mean()
@@ -503,12 +499,10 @@ if __name__ == "__main__":
                 default=10, help="Number of IS samples")
     subparser.add_argument("--deterministic-layers", type=int, dest="deterministic_layers",
                 default=0, help="Deterministic hidden layers per stochastic layer")
-
     subparser.add_argument("--supervised_layer_size", type=str,  dest="supervised_layer_size",
                 default="", help="Comma seperated list of supervised layer sizes")
-
-    subparser.add_argument("UNsupervised_layer_size",  type=str,
-                default="200,200,200", help="Comma seperated list of unsupervised layer sizes")  
+    subparser.add_argument("layer_spec", type=str,
+                default="200,200,200", help="Comma seperated list of layer sizes")
     args = parser.parse_args()
     
     main(args)

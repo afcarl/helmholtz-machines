@@ -525,9 +525,9 @@ class GaussianLayer(Initializable, ProbabilisticLayer):
 #------------------------------------------------------------------------------------
  
  
-class MultinomialTopLayer_label(Initializable, ProbabilisticTopLayer):
+class MultinomialTopLayer(Initializable, ProbabilisticTopLayer):
     def __init__(self, dim_X, biases_init, **kwargs):
-        super(MultinomialTopLayer_label, self).__init__(**kwargs)
+        super(MultinomialTopLayer, self).__init__(**kwargs)
         self.dim_X = dim_X
         self.biases_init = biases_init
 
@@ -540,25 +540,24 @@ class MultinomialTopLayer_label(Initializable, ProbabilisticTopLayer):
     def _initialize(self):
         b, = self.parameters
         self.biases_init.initialize(b, self.rng)
- 
 
-    @application(inputs=[  'Y'], outputs=['log_prob'])
-    def log_prob(self, Y): #x is the labels
+    @application(inputs=['X'], outputs=['log_prob'])
+    def log_prob(self, X): #x is the labels
         b = self.parameters[0]
         prob_X = tensor.nnet.softmax(b)
-        log_prob = Y*tensor.log(prob_X)  
-       
+        log_prob = X*tensor.log(prob_X)  
         return log_prob.sum(axis=1)
- 
+
+    def sample_expected(self, n_samples):
+        b = self.parameters[0]
+        prob_X = tensor.nnet.softmax(b)
+        prob_X = tensor.zeros((n_samples, prob_X.shape[0])) + prob_X 
+        return prob_X
 
     @application(outputs=['X', 'log_prob'])
-    def sample(self, n_samples, Y):
-        b = self.parameters[0]
-        prob_X = tensor.nnet.softmax(b)
-   
-        prob_X = tensor.zeros((n_samples, prob_X.shape[0])) + prob_X 
- 
-        X = Multinomial(prob_X, rng=self.theano_rng, nstreams=N_STREAMS)#('auto')
+    def sample(self, n_samples):
+        prob_X = self.sample_expected(n_samples)
+        X = Multinomial(prob_X, rng=self.theano_rng, nstreams=N_STREAMS)
         return X, self.log_prob(X)
        
  
@@ -570,30 +569,19 @@ class MultinomialLayer(Initializable, ProbabilisticLayer):
         super(MultinomialLayer, self).__init__(**kwargs)
 
         self.mlp = mlp
-
         self.dim_X = mlp.output_dim
         self.dim_Y = mlp.input_dim
-
         self.children = [self.mlp]
-
  
     def sample_expected(self, Y):
         return tensor.nnet.softmax(self.mlp.apply(Y))
-
  
     def sample(self, Y):
         prob_X = self.sample_expected(Y)
         X = Multinomial('auto')(prob_X, rng=self.theano_rng, nstreams=N_STREAMS)
         return X , self.log_prob(X, Y)
- 
+
     def log_prob(self, X, Y): #x is the labels
         prob_X = self.sample_expected(Y)
         log_prob = X*tensor.log(prob_X) 
-       
         return log_prob.sum(axis=1)
-      
-    def  prob(self, X, Y):
-        prob_X = self.sample_expected(Y)
-        prob = X*tensor.log(prob_X)  
- 
-        return prob

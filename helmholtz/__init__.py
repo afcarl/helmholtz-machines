@@ -4,7 +4,6 @@ from __future__ import division, print_function
 import sys
 sys.path.append("../")
 
-
 import logging
 import numpy
 import re
@@ -23,7 +22,7 @@ from blocks.select import Selector
 from blocks.roles import PARAMETER
 
 from initialization import RWSInitialization
-from prob_layers import BernoulliTopLayer, BernoulliLayer, MultinomialTopLayer_label, MultinomialLayer
+from prob_layers import BernoulliTopLayer, BernoulliLayer, MultinomialLayer
 
 logger = logging.getLogger(__name__)
 floatX = theano.config.floatX

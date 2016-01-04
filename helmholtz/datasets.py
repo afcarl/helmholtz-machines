@@ -37,7 +37,6 @@ def map_tfd(batch):
 
 def get_streams(data_name, batch_size):
     """ Returns
-    
 
 	x_dim, y_dim, data_train, data_valid, data_test    
     """
@@ -61,7 +60,7 @@ def get_streams(data_name, batch_size):
                 iteration_scheme=ShuffledScheme(data.num_examples, batch_size)
             ), 
             #fn=map_fn),
-            which_sources='features')
+            which_sources=['features'])
         for data, batch_size in ((data_train, batch_size),
                                  (data_valid, small_batch_size),
                                  (data_test, small_batch_size))
@@ -120,7 +119,7 @@ def get_data(data_name):
 
         width = 4
         x_dim = width*width
-	y_dim = 0
+        y_dim = 0
 	
         data_train = Bars(num_examples=5000, width=width, sources=['features'])
         data_valid = Bars(num_examples=5000, width=width, sources=['features'])
@@ -138,12 +137,12 @@ def get_data(data_name):
         assert some_features.shape[0] == 100 
         assert some_targets.shape[0] == 100 
 
-        #print some_features.ndim
+        print some_features.shape
         x_dim = 1
         for i in range(1, some_features.ndim):
             x_dim = x_dim*some_features.shape[i]
 	
-        #print some_targets.ndim
+        print some_targets.shape
         y_dim = 1
         for i in range(1, some_targets.ndim):
             y_dim = y_dim*some_targets.shape[i]	
@@ -162,7 +161,7 @@ def get_data(data_name):
 
         some_features = some_features.reshape([100, -1])
         x_dim = some_features.shape[1]
-	y_dim = 0        
+        y_dim = 0        
     else:
         raise ValueError("Unknown dataset %s" % data_name)
 
