@@ -557,7 +557,7 @@ class MultinomialTopLayer(Initializable, ProbabilisticTopLayer):
     @application(outputs=['X', 'log_prob'])
     def sample(self, n_samples):
         prob_X = self.sample_expected(n_samples)
-        X = Multinomial(prob_X, rng=self.theano_rng, nstreams=N_STREAMS)
+        X = Multinomial('auto')(prob_X, rng=self.theano_rng, nstreams=N_STREAMS)
         return X, self.log_prob(X)
        
  

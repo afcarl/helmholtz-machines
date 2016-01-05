@@ -4,6 +4,7 @@ from __future__ import division, print_function
 import sys
 sys.path.append("../")
 
+
 import logging
 import numpy
 import re
@@ -22,7 +23,7 @@ from blocks.select import Selector
 from blocks.roles import PARAMETER
 
 from initialization import RWSInitialization
-from prob_layers import BernoulliTopLayer, BernoulliLayer, MultinomialLayer
+from prob_layers import BernoulliTopLayer, BernoulliLayer
 
 logger = logging.getLogger(__name__)
 floatX = theano.config.floatX
@@ -79,15 +80,14 @@ def flatten_values(vals, size):
     flattened_vals : list
         Reshaped version of each *vals* tensor.
     """
-    return vals.reshape((size, tensor.prod(vals.shape)//size))
-    # data_dim = vals[0].ndim - 2
-    # assert all([v.ndim == data_dim+2 for v in vals])
-    # 
-    # if data_dim == 0:
-    #     return [v.reshape([size]) for v in vals]
-    # elif data_dim == 1:
-    #     return [v.reshape([size, v.shape[2]]) for v in vals]
-    # raise 
+    data_dim = vals[0].ndim - 2
+    assert all([v.ndim == data_dim+2 for v in vals])
+
+    if data_dim == 0:
+        return [v.reshape([size]) for v in vals]
+    elif data_dim == 1:
+        return [v.reshape([size, v.shape[2]]) for v in vals]
+    raise 
 
 def unflatten_values(vals, batch_size, n_samples):
     """ Reshape a list of Theano tensors. 
@@ -217,144 +217,6 @@ def create_layers(layer_spec, data_dim, deterministic_layers=0, deterministic_ac
             **inits))
 
     return p_layers, q_layers
-
-
-#-----------------------------------------------------------------------------
-
-
-def create_semi_layers(sup_layer_size , unsup_layer_size , data_dim, deterministic_size=0,y_dim = 10, deterministic_layers=0, deterministic_act=None ):
- 
- 
- 
-	inits = {
-	    'weights_init': RWSInitialization(factor=1.),
-    #        'weights_init': IsotropicGaussian(0.1),
-	    'biases_init': Constant(-1.0),
-	}
-
-	#sup_layer_size = re.match("(\d*\.?\d*)x-(\d+)l-(\d+)", sup_layer_size)
-	
-	#unsup_layer_size = re.match("(\d*\.?\d*)x-(\d+)l-(\d+)", unsup_layer_size)
-        if sup_layer_size == "":
-           sup_layer_size =[]
-        else:
-           sup_layer_size = [int(i) for i in sup_layer_size.split(",")]
-	unsup_layer_size =[ data_dim]+ [int(i) for i in unsup_layer_size.split(",")]
-
-
-      
-# ----------------------------
-        #self.p_y = MultinomialTop(...)
-        p_y = MultinomialTopLayer_label(
-            y_dim ,
-            name="p_y",
-            **inits) 
-# ----------------------------
-        p_h2_layers = []     # prior -> h2_dim           [BerrnoulliTop(...), Bernoulli(...)]
-        for l, (size_lower, size_upper) in enumerate(zip(sup_layer_size[:len(sup_layer_size)], sup_layer_size[1:len(sup_layer_size)])):
-	     
-            size_mid = (deterministic_size * (size_upper + size_lower)) // 2
-
-            p_h2_layers.append(
-                BernoulliLayer(
-                    MLP(
-                         [Logistic()],#Activations
-                        [size_upper]+[size_mid for i in range(deterministic_layers)]+[size_lower],#Dim
-                        **inits), 
-                    name="p_h2_layers%d"%l))
-        if len(sup_layer_size) != 0: 
-            p_h2_layers.append(
-                    BernoulliTopLayer(
-                        sup_layer_size[-1],
-                        name="p_h2_layers",
-                        **inits))    
-#--------------------------------
-            
-        #self.p_h1 = Bernoulli(...)   # y_dim+h2_dim -> h1_dim    Bernoulli(...)
-        if len(sup_layer_size) != 0:
-            p_h1 =  BernoulliLayer(
-                            MLP(
-                                [Logistic()],#Activations
-                                [y_dim + sup_layer_size[0]]+[size_mid for i in range(deterministic_layers)]+[unsup_layer_size[-1]],#Dim
-                                **inits), 
-                                name="p_h1"  )
-  
-        else:
-            p_h1 =  BernoulliLayer(
-                            MLP(
-                                [Logistic()],#Activations
-                                [y_dim ]+[size_mid for i in range(deterministic_layers)]+[unsup_layer_size[-1]],#Dim
-                                **inits), 
-                                name="p_h1"  )
-#--------------------------------
-        p_layers = [  ]        # h1_dim -> x_dim           [Bernoulli(...), ...]
-
-        for l, (size_lower, size_upper) in enumerate(zip(unsup_layer_size[:len(unsup_layer_size)],  unsup_layer_size[1:len(unsup_layer_size)])):
-            
-            size_mid = (deterministic_size * (size_upper + size_lower)) // 2
-
-            p_layers.append(
-                BernoulliLayer(
-                    MLP(
-                        [Logistic()],#Activations
-                        [size_upper]+[size_mid for i in range(deterministic_layers)]+[size_lower],#Dim
-                        **inits), 
-                    name="p_layers%d"%l))
- 
-#--------------------------------
-        q_layers = []        # x_dim -> h1_dim          [Bernoulli(...)]
-        for l, (size_lower, size_upper) in enumerate(zip(unsup_layer_size[:len(unsup_layer_size)],  unsup_layer_size[1:len(unsup_layer_size)])):
- 
-            size_mid = (deterministic_size * (size_upper + size_lower)) // 2
-            q_layers.append(
-                    BernoulliLayer(
-                        MLP(
-                            [Logistic()],
-                            [size_lower]+[size_mid for i in range(deterministic_layers)]+[size_upper],
-                            **inits), 
-                        name="q_layer%d"%l))
-#--------------------------------
-        #self.q_y = Multinomial(...)  # h1_dim -> y_dim          Multinomial
-        q_y =  MultinomialLayer(
-	                    MLP(
-                         [ Identity()],
-                         [unsup_layer_size[-1]]+[size_mid for i in range(deterministic_layers)]+[y_dim],
-                    		**inits), 
-                          name="q_y " )      
-        
-#--------------------------------        
-        q_h2_layers = []     # h1_dim+y_dim -> h2_dim   [Berrnoulli, ...]
-        if len(sup_layer_size) != 0:
-            q_h2_layers.append(
-                        BernoulliLayer(
-                            MLP(
-                                [Logistic()],
-                                [unsup_layer_size[-1] + y_dim]+[size_mid for i in range(deterministic_layers)]+[sup_layer_size[0]],
-                                **inits), 
-                            name="q_h2_layers")) 
-        for l, (size_lower, size_upper) in enumerate(zip(sup_layer_size[:len(sup_layer_size)], sup_layer_size[1:len(sup_layer_size)])):
- 
-            size_mid = (deterministic_size * (size_upper + size_lower)) // 2
-
-            q_h2_layers.append(
-                    BernoulliLayer(
-                        MLP(
-                            [Logistic()],
-                            [size_lower]+[size_mid for i in range(deterministic_layers)]+[size_upper],
-                            **inits), 
-                        name="q_h2_layers%d"%l))
-#--------------------------------  
-        q_y_given_x =  MultinomialLayer(
-	                    MLP(
-                         [Logistic()],
-                         [3]+[size_mid for i in range(deterministic_layers)]+[5],
-                    		**inits), 
-                          name="q_y " ) 
- 
-         
-
-	return p_y, p_h1, p_h2_layers, p_layers, q_layers, q_y , q_h2_layers, q_y_given_x
-
 
 #-----------------------------------------------------------------------------
 

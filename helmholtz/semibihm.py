@@ -117,65 +117,74 @@ class SemiBiHM(HelmholtzMachine):
     def get_gradients(self, x, y, mask, n_samples):
         bottom_p = self.bottom_p
         bottom_q = self.bottom_q
-        top_p = self.top_p
         n_layers = len(bottom_p)
+        top_p = self.top_p
 
         batch_size = x.shape[0]
 
-        #import ipdb; ipdb.set_trace()
 
         # replicate everything
         x = replicate_batch(x, n_samples)
         y = replicate_batch(y, n_samples)
         #m = replicate_batch(mask, n_samples)
-        m = 1
+        m = np.zeros(100*n_samples, dtype=np.uint8)
+        m[0:10*n_samples] = 1
 
         # calculate ingredients for A(x)
         a_samples = layers_sample(bottom_q, x)      # samples upwards from Q
         a_log_probs_q = layers_log_prob(bottom_q, [x]+a_samples)
         a_log_probs_p = layers_log_prob(rev(bottom_p), rev([x]+a_samples))
+        a_log_probs_p += [top_p.log_prob(a_samples[-1])]
         
         a_log_omega = (sum(a_log_probs_p) - sum(a_log_probs_q)) / 2.
 
         # calculate ingredients for B(x, y)
-        b_samples = layers_sample(bottom_q, x)      # samples upwards from Q
+        #b_samples = layers_sample(bottom_q, x)      # samples upwards from Q
+        b_samples = list(a_samples)                 # make copy of samples
         b_samples[-1] = y                           # fix top level to training data
         b_log_probs_q = layers_log_prob(bottom_q, [x]+b_samples)    
         b_log_probs_p = layers_log_prob(rev(bottom_p), rev([x]+b_samples))
+        b_log_probs_p += [top_p.log_prob(b_samples[-1])]
 
         b_log_omega = (sum(b_log_probs_p) + b_log_probs_q[-1] - sum(b_log_probs_q[:-1])) / 2.
 
-        # both a_log_omega and b_log_omrga are (batch_size*n_samples) vectors; we need to reshape and logsumexp
-        log_a = logsumexp(a_log_omega.reshape([batch_size, n_samples]), axis=1)  # not yet /n_samples!
-        log_b = logsumexp(b_log_omega.reshape([batch_size, n_samples]), axis=1)  # not yet /n_samples!
-
         # calculate normalized importance weights
-        a_norm_omega = tensor.exp(a_log_omega - log_a)
-        b_norm_omega = tensor.exp(b_log_omega - log_b)
+        # normalize weights // both a_log_omega and b_log_omrga are (batch_size*n_samples) vectors; we need to reshape and logsumexp
+
+        a_log_omega = a_log_omega.reshape([batch_size, n_samples])
+        b_log_omega = b_log_omega.reshape([batch_size, n_samples])
+
+        log_a = logsumexp(a_log_omega, axis=1)  # not yet /n_samples!
+        log_b = logsumexp(b_log_omega, axis=1)  # not yet /n_samples!
+
+        a_norm_omega = tensor.exp(a_log_omega - tensor.shape_padright(log_a))
+        b_norm_omega = tensor.exp(b_log_omega - tensor.shape_padright(log_b))
+
+        a_norm_omega = a_norm_omega.reshape([batch_size*n_samples])
+        b_norm_omega = b_norm_omega.reshape([batch_size*n_samples])
 
         # Choose how to combine the gradients
-        a_norm_omega = tensor.switch(mask, -a_norm_omega, 2*a_norm_omega)
-        b_norm_omega = tensor.switch(mask,  b_norm_omega, 0)
+        a_norm_omega = tensor.switch(m, -a_norm_omega, 2*a_norm_omega)
+        b_norm_omega = tensor.switch(m,  b_norm_omega, 0)
 
         # calculate gradients
-        #gradients = {}
-        gradients = bottom_q[0].get_gradients(a_samples[0], x)
-        #gradients = merge_gradients(gradients, layers_get_gradients(bottom_q, [x]+a_samples, a_norm_omega))
-        #gradients = merge_gradients(gradients, layers_get_gradients(bottom_q, [x]+b_samples, b_norm_omega))
-        #gradients = merge_gradients(gradients, layers_get_gradients(rev(bottom_p), rev([x]+b_samples), b_norm_omega))
-        #gradients = merge_gradients(gradients, layers_get_gradients(rev(bottom_p), rev([x]+a_samples), a_norm_omega))
-        #gradients = merge_gradients(gradients, top_p.get_gradients(a_samples[-1], a_norm_omega))
-        #gradients = merge_gradients(gradients, top_p.get_gradients(b_samples[-1], b_norm_omega))
+        gradients = OrderedDict()
+        gradients = merge_gradients(gradients, layers_get_gradients(bottom_q, [x]+a_samples, a_norm_omega))
+        gradients = merge_gradients(gradients, layers_get_gradients(bottom_q, [x]+b_samples, b_norm_omega))
+        gradients = merge_gradients(gradients, layers_get_gradients(rev(bottom_p), rev([x]+b_samples), b_norm_omega))
+        gradients = merge_gradients(gradients, layers_get_gradients(rev(bottom_p), rev([x]+a_samples), a_norm_omega))
+        gradients = merge_gradients(gradients, top_p.get_gradients(a_samples[-1], a_norm_omega))
+        gradients = merge_gradients(gradients, top_p.get_gradients(b_samples[-1], b_norm_omega))
 
         # Calculate p(x) and p(y|x)
         log_a -= tensor.log(n_samples)
         log_b -= tensor.log(n_samples)
 
         log_px = 2*log_a
-        log_pygx = tensor.switch(mask, log_b - log_a, 0)
+        log_pygx = log_b - log_a
+        #log_pygx = tensor.switch(mask, log_b - log_a, 0)
 
         return gradients, log_px, log_pygx
-
 
     def log_likelihood(self, features, labels, mask, n_samples):
         """
