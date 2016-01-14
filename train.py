@@ -225,9 +225,8 @@ def main(args):
     # Gradient and training monitoring
 
     if args.method in ['vae', 'dvae']:
-        log_p_bound = model.log_likelihood_bound(x, args.n_samples)
-        gradients = None
-        log_p_bound  = -log_p_bound.mean()
+        log_p_bound, gradients = model.get_gradients(x, args.n_samples)
+        log_p_bound = -log_p_bound.mean()
         log_p_bound.name  = "log_p_bound"
         cost = log_p_bound
 
