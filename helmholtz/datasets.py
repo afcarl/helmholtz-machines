@@ -8,7 +8,7 @@ from fuel.streams import DataStream
 from fuel.transformers import Flatten, SourcewiseTransformer
 
 local_datasets = ["adult", "dna", "web", "nips", "mushrooms", "ocr_letters", "connect4", "rcv1"]
-supported_datasets = local_datasets + ['mnist', 'bmnist', 'bars', 'silhouettes', 'tfd']
+supported_datasets = local_datasets + ['mnist', 'smnist', 'bmnist', 'bars', 'silhouettes', 'tfd']
 
 # 'tfd' is missing but needs normalization 
 
@@ -27,16 +27,21 @@ class MapFeatures(SourcewiseTransformer):
         return self.fn(source_batch)
 
 def map_mnist(batch):
-    return 1. * batch > 0.5
+    return np.cast[np.float32](batch/255. > 0.5)
+
+def sample_pixel(batch):
+    return np.cast[np.float32](batch/255. >= np.random.uniform(size=batch.shape))
 
 def map_tfd(batch):
-    return np.cast[np.float32](batch / 255.)
+    return np.cast[np.float32](batch/255.)
 
 
 def get_streams(data_name, batch_size):
 
     if data_name == "mnist":
         map_fn = map_mnist
+    if data_name == "smnist":
+        map_fn = sample_pixel
     elif data_name == "tfd":
         map_fn = map_tfd
     else:
@@ -72,7 +77,7 @@ def get_data(data_name):
         data_train = BinarizedMNIST(which_sets=['train'], sources=['features'])
         data_valid = BinarizedMNIST(which_sets=['valid'], sources=['features'])
         data_test  = BinarizedMNIST(which_sets=['test'], sources=['features'])
-    elif data_name == 'mnist':
+    elif data_name == 'mnist' or data_name == 'smnist':
         from fuel.datasets.mnist import MNIST
 
         x_dim = 28*28 
