@@ -8,10 +8,13 @@ import numpy
 import theano
 
 from theano import tensor
+from collections import OrderedDict
 
 from blocks.bricks.base import application, Brick, lazy
 from blocks.bricks import Random, Initializable, MLP, Logistic
 from blocks.initialization import Uniform, IsotropicGaussian, Constant, Sparse, Identity
+from blocks.roles import has_roles, WEIGHT, PARAMETER
+from blocks.select import Selector
 
 from . import HelmholtzMachine, replicate_batch, logsumexp
 from .batch_normalization import BatchNormalizedMLP
@@ -29,8 +32,10 @@ class VAE(HelmholtzMachine, Random):
             p(z) = Gaussian( ... )  and
             p(x|z) = Bernoulli( ... )
     """
-    def __init__(self, x_dim, hidden_layers, hidden_act, z_dim, batch_norm=False, **kwargs):
+    def __init__(self, x_dim, hidden_layers, hidden_act, z_dim, batch_norm=False, l2reg=1e-3, **kwargs):
         super(VAE, self).__init__([], [], **kwargs)
+
+        self.l2reg = l2reg
 
         inits = {
             'weights_init': IsotropicGaussian(std=0.1),
@@ -155,3 +160,14 @@ class VAE(HelmholtzMachine, Random):
         log_p_bound = recons_term - kl_term
 
         return log_p_bound
+
+    def get_gradients(self, features, n_samples):
+        log_p_bound = self.log_likelihood_bound(features, n_samples)
+
+        gradients = OrderedDict()
+        params = Selector(self).get_parameters()
+        for pname, param in params.iteritems():
+            cost = -log_p_bound.mean() + self.l2reg * tensor.sum(param**2)
+            gradients[param] = tensor.grad(cost, param)
+
+        return log_p_bound, gradients
