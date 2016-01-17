@@ -1,5 +1,5 @@
 
-from __future__ import division, print_function 
+from __future__ import division, print_function
 
 import sys
 sys.path.append("../")
@@ -32,7 +32,8 @@ floatX = theano.config.floatX
 def logsumexp(A, axis=None):
     """Numerically stable log( sum( exp(A) ) ) """
     A_max = tensor.max(A, axis=axis, keepdims=True)
-    B = tensor.log(tensor.sum(tensor.exp(A-A_max), axis=axis, keepdims=True))+A_max
+    B = tensor.log(tensor.sum(tensor.exp(A - A_max),
+                              axis=axis, keepdims=True)) + A_max
     B = tensor.sum(B, axis=axis)
     return B
 
@@ -61,16 +62,16 @@ def replicate_batch(A, repeat):
     """
     A_ = A.dimshuffle((0, 'x', 1))
     A_ = A_ + tensor.zeros((A.shape[0], repeat, A.shape[1]), dtype=floatX)
-    A_ = A_.reshape( [A_.shape[0]*repeat, A.shape[1]] )
+    A_ = A_.reshape([A_.shape[0] * repeat, A.shape[1]])
     return A_
 
 
 def flatten_values(vals, size):
     """ Flatten a list of Theano tensors.
-    
-    Flatten each Theano tensor in *vals* such that each of them is 
+
+    Flatten each Theano tensor in *vals* such that each of them is
     reshaped from shape (a, b, *c) to (size, *c). In other words:
-    The first two dimension of each tensor in *vals* are replaced 
+    The first two dimension of each tensor in *vals* are replaced
     with a single dimension is size *size*.
 
     Parameters
@@ -79,51 +80,52 @@ def flatten_values(vals, size):
         List of Theano tensors
 
     size : int
-        New size of the first dimension 
-    
+        New size of the first dimension
+
     Returns
     -------
     flattened_vals : list
         Reshaped version of each *vals* tensor.
     """
     data_dim = vals[0].ndim - 2
-    assert all([v.ndim == data_dim+2 for v in vals])
+    assert all([v.ndim == data_dim + 2 for v in vals])
 
     if data_dim == 0:
         return [v.reshape([size]) for v in vals]
     elif data_dim == 1:
         return [v.reshape([size, v.shape[2]]) for v in vals]
-    raise 
+    raise
+
 
 def unflatten_values(vals, batch_size, n_samples):
-    """ Reshape a list of Theano tensors. 
+    """ Reshape a list of Theano tensors.
 
     Parameters
     ----------
     vals : list
         List of Theano tensors
     batch_size : int
-        New first dimension 
+        New first dimension
     n_samples : int
         New second dimension
-    
+
     Returns
     -------
     reshaped_vals : list
         Reshaped version of each *vals* tensor.
     """
     data_dim = vals[0].ndim - 1
-    assert all([v.ndim == data_dim+1 for v in vals])
+    assert all([v.ndim == data_dim + 1 for v in vals])
 
     if data_dim == 0:
         return [v.reshape([batch_size, n_samples]) for v in vals]
     elif data_dim == 1:
         return [v.reshape([batch_size, n_samples, v.shape[1]]) for v in vals]
-    raise 
+    raise
 
 
 def merge_gradients(old_gradients, new_gradients, scale=1.):
-    """Take and merge multiple ordered dicts 
+    """Take and merge multiple ordered dicts
     """
     if isinstance(new_gradients, (dict, OrderedDict)):
         new_gradients = [new_gradients]
@@ -131,14 +133,15 @@ def merge_gradients(old_gradients, new_gradients, scale=1.):
     for gradients in new_gradients:
         assert isinstance(gradients, (dict, OrderedDict))
         for key, val in gradients.items():
-            if old_gradients.has_key(key):
+            if key in old_gradients:
                 old_gradients[key] = old_gradients[key] + scale * val
-            else:       
+            else:
                 old_gradients[key] = scale * val
     return old_gradients
 
 
-def create_layers(layer_spec, data_dim, deterministic_layers=0, deterministic_act=None, deterministic_size=1.):
+def create_layers(layer_spec, data_dim, deterministic_layers=0,
+                  deterministic_act=None, deterministic_size=1.):
     """
     Parameters
     ----------
@@ -151,7 +154,7 @@ def create_layers(layer_spec, data_dim, deterministic_layers=0, deterministic_ac
         will work with thgis dimension.
     deterministic_layers : int
         Dont want to talk about it.
-    deterministic_act : 
+    deterministic_act :
     deterministic_size : float
 
     Returns
@@ -163,7 +166,7 @@ def create_layers(layer_spec, data_dim, deterministic_layers=0, deterministic_ac
     """
     inits = {
         'weights_init': RWSInitialization(factor=1.),
-#        'weights_init': IsotropicGaussian(0.1),
+        #        'weights_init': IsotropicGaussian(0.1),
         'biases_init': Constant(-1.0),
     }
 
@@ -173,8 +176,9 @@ def create_layers(layer_spec, data_dim, deterministic_layers=0, deterministic_ac
         last = float(m.groups()[2])
         n_layers = int(m.groups()[1])
 
-        base = numpy.exp(numpy.log(first/last) / (n_layers-1))
-        layer_sizes = [data_dim] + [int(last*base**i) for i in reversed(range(n_layers))]
+        base = numpy.exp(numpy.log(first / last) / (n_layers - 1))
+        layer_sizes = [data_dim] + [int(last * base ** i)
+                                    for i in reversed(range(n_layers))]
         print(layer_sizes)
     else:
         layer_specs = [i for i in layer_spec.split(",")]
@@ -182,15 +186,16 @@ def create_layers(layer_spec, data_dim, deterministic_layers=0, deterministic_ac
 
     p_layers = []
     q_layers = []
-    for l, (size_lower, size_upper) in enumerate(zip(layer_sizes[:-1], layer_sizes[1:])):
+    for l, (size_lower, size_upper) in enumerate(
+            zip(layer_sizes[:-1], layer_sizes[1:])):
         """
         if size_upper < 0:
             lower_before_repeat = size_lower
             p = BernoulliLayer(
-                    MLP([Sigmoid()], [size_lower, size_lower], **rinits), 
+                    MLP([Sigmoid()], [size_lower, size_lower], **rinits),
                     name="p_layer%d"%l)
             q = BernoulliLayer(
-                    MLP([Sigmoid()], [size_lower, size_lower], **rinits), 
+                    MLP([Sigmoid()], [size_lower, size_lower], **rinits),
                     name="q_layer%d"%l)
             for r in xrange(-size_upper):
                 p_layers.append(p)
@@ -204,17 +209,23 @@ def create_layers(layer_spec, data_dim, deterministic_layers=0, deterministic_ac
         p_layers.append(
             BernoulliLayer(
                 MLP(
-                    [deterministic_act() for i in range(deterministic_layers)]+[Logistic()],
-                    [size_upper]+[size_mid for i in range(deterministic_layers)]+[size_lower],
-                    **inits), 
-                name="p_layer%d"%l))
+                    [deterministic_act()
+                     for i in range(deterministic_layers)] + [Logistic()],
+                    [size_upper] +
+                    [size_mid for i in range(
+                        deterministic_layers)] + [size_lower],
+                    **inits),
+                name="p_layer%d" % l))
         q_layers.append(
             BernoulliLayer(
                 MLP(
-                    [deterministic_act() for i in range(deterministic_layers)]+[Logistic()],
-                    [size_lower]+[size_mid for i in range(deterministic_layers)]+[size_upper],
-                    **inits), 
-                name="q_layer%d"%l))
+                    [deterministic_act()
+                     for i in range(deterministic_layers)] + [Logistic()],
+                    [size_lower] +
+                    [size_mid for i in range(
+                        deterministic_layers)] + [size_upper],
+                    **inits),
+                name="q_layer%d" % l))
 
     p_layers.append(
         BernoulliTopLayer(
@@ -228,9 +239,10 @@ def create_layers(layer_spec, data_dim, deterministic_layers=0, deterministic_ac
 
 
 class HelmholtzMachine(Initializable, Random):
+
     def __init__(self, p_layers, q_layers, **kwargs):
         super(HelmholtzMachine, self).__init__(**kwargs)
-        
+
         self.p_layers = p_layers
         self.q_layers = q_layers
 
@@ -245,13 +257,13 @@ class HelmholtzMachine(Initializable, Random):
 
         p_layers = self.p_layers
         q_layers = self.q_layers
-        
+
         for p, q in zip(p_layers[:-1], q_layers):
             if not hasattr(p, 'mlp'):
                 continue
             if not hasattr(q, 'mlp'):
                 continue
-        
+
             p_trafos = p.mlp.linear_transformations
             q_trafos = q.mlp.linear_transformations
 
@@ -261,26 +273,27 @@ class HelmholtzMachine(Initializable, Random):
                 Wq = qtrafo.W.get_value()
 
                 assert Wp.shape == Wq.T.shape
-                qtrafo.W.set_value(Wp.T)    
+                qtrafo.W.set_value(Wp.T)
         """
 
 #-----------------------------------------------------------------------------
 
 
 class GradientMonitor(object):
+
     def __init__(self, gradients, prefix=""):
         self.gradients = gradients
         self.prefix = prefix
         pass
 
     def vars(self):
-        prefix = self.prefix 
+        prefix = self.prefix
         monitor_vars = []
 
         aggregators = {
-            'min':   tensor.min,
-            'max':   tensor.max,
-            'mean':  tensor.mean,
+            'min': tensor.min,
+            'max': tensor.max,
+            'mean': tensor.mean,
         }
 
         for key, value in six.iteritems(self.gradients):

@@ -10,7 +10,7 @@ import helmholtz.datasets as datasets
 def test_shape():
     def check_dataset(name):
         try:
-            x_dim, data_train, data_valid, data_test = datasets.get_streams(name, 10)
+            x_dim, data_train, data_valid, data_test = datasets.get_streams(name, batch_size=10, small_batch_size=10)
         except IOError as e:
             raise SkipTest
 
@@ -27,7 +27,7 @@ def test_shape():
 def test_range():
     def check_dataset(name):
         try:
-            x_dim, data_train, data_valid, data_test = datasets.get_streams(name, 10)
+            x_dim, data_train, data_valid, data_test = datasets.get_streams(name, batch_size=10, small_batch_size=10)
         except IOError as e:
             raise SkipTest
 

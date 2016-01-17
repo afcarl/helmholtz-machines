@@ -112,7 +112,7 @@ if __name__ == "__main__":
     #----------------------------------------------------------------------
     logger.info("Loading dataset...")
 
-    x_dim, data_train, data_valid, data_test = datasets.get_data(args.data)
+    x_dim, _, _, data_test = datasets.get_data(args.data)
 
     num_examples = data_test.num_examples
     n_samples = (int(s) for s in args.nsamples.split(","))
@@ -122,10 +122,7 @@ if __name__ == "__main__":
     
     for K in n_samples:
         batch_size = max(args.max_batch // K, 1)
-        stream = Flatten(DataStream(
-                        data_test,
-                        iteration_scheme=ShuffledScheme(num_examples, batch_size)
-                    ), which_sources='features')
+        x_dim, _, _, stream = datasets.get_streams(args.data, batch_size)
 
         log_p = np.asarray([])
         log_ps = np.asarray([])

@@ -1,4 +1,4 @@
-#!t usr/bin/env python 
+#!/usr/bin/env python
 
 from __future__ import division, print_function
 
@@ -23,10 +23,6 @@ theano_rng = MRG_RandomStreams(seed=2341)
 
 #-----------------------------------------------------------------------------
 
-class NaturalGaussianOp(theano.Op):
-    pass
-
-
 class BernoulliOp(theano.Op):
     """ back-propable' Bernoulli distribution.
     """
@@ -50,7 +46,7 @@ class BernoulliOp(theano.Op):
 
     def perform(self, node, inputs, output_storage):
         logger.warning("BernoulliOp.perform(...) called")
-        
+
         prob = inputs[0]
         noise = inputs[1]
 
@@ -83,9 +79,11 @@ def replace_bernoulli_op(node):
 
     prob = node.inputs[0]
     noise = node.inputs[1]
-    
+
+
+
     samples = (noise < prob).astype(floatX)
-    
+
     return [samples]
 
 
@@ -111,11 +109,11 @@ class Multinomial(theano.Op):
             self.odtype = 'auto'
 
     def make_node(self, pvals,   rng = theano_rng, nstreams=None):
-  
+
         nb_outcomes = pvals.shape[0]
         unis = rng.uniform(size =  (1,nb_outcomes) , low=0.0, high=1.0 )#np.random.uniform(size =  (1,pvals.shape[1]) , low=0.0, high=1.0 )
         pvals = tensor.as_tensor_variable(pvals)
-        
+
         unis = tensor.as_tensor_variable(unis[0])
         if pvals.ndim != 2:
             raise NotImplementedError('pvals ndim should be 2', pvals.ndim)
@@ -241,7 +239,7 @@ class Multinomial(theano.Op):
 #=============================================================================
 
 if __name__ == "__main__":
-    
+
     n_samples = tensor.iscalar("n_samples")
     prob = tensor.vector('prob')
     target_prob = tensor.vector('target_prob')
@@ -250,10 +248,10 @@ if __name__ == "__main__":
     bprob = tensor.ones(shape) * prob
 
     samples = bernoulli(bprob, rng=theano_rng)
-    
+
     mean = tensor.mean(samples, axis=0)
     cost = tensor.sum((mean-target_prob)**2)
-    
+
     grads = theano.grad(cost, prob)
 
     print("-"*78)
@@ -261,11 +259,11 @@ if __name__ == "__main__":
     print("-"*78)
 
     do_sample = theano.function(
-                inputs=[prob, target_prob, n_samples], 
+                inputs=[prob, target_prob, n_samples],
                 outputs=[samples, grads],
                 allow_input_downcast=True, name="do_sample")
 
-    
+
     #-------------------------------------------------------------------------
     n_samples = 10000
     prob = np.linspace(0, 1, 10)
