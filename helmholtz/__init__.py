@@ -1,9 +1,7 @@
-
 from __future__ import division, print_function
 
 import sys
 sys.path.append("../")
-
 
 import logging
 import numpy
@@ -121,13 +119,13 @@ def unflatten_values(vals, batch_size, n_samples):
 def merge_gradients(gradients, more_gradients, scale=1.):
     """Take and merge multiple ordered dicts
 
-    
+
 
     Parameters
     ----------
     gradients : dict
     more_gradients : dict
-        
+
 
     Returns
     -------
@@ -245,6 +243,7 @@ def create_layers(layer_spec, data_dim, deterministic_layers=0,
 
 
 class HelmholtzMachine(Initializable, Random):
+    """ Base class for various Helmholtz machines """
 
     def __init__(self, p_layers, q_layers, **kwargs):
         super(HelmholtzMachine, self).__init__(**kwargs)
