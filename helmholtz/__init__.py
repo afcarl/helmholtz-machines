@@ -118,20 +118,32 @@ def unflatten_values(vals, batch_size, n_samples):
     raise
 
 
-def merge_gradients(old_gradients, new_gradients, scale=1.):
+def merge_gradients(gradients, more_gradients, scale=1.):
     """Take and merge multiple ordered dicts
-    """
-    if isinstance(new_gradients, (dict, OrderedDict)):
-        new_gradients = [new_gradients]
 
-    for gradients in new_gradients:
+    
+
+    Parameters
+    ----------
+    gradients : dict
+    more_gradients : dict
+        
+
+    Returns
+    -------
+    dict
+    """
+    if isinstance(more_gradients, (dict, OrderedDict)):
+        more_gradients = [more_gradients]
+
+    for gradients in more_gradients:
         assert isinstance(gradients, (dict, OrderedDict))
         for key, val in gradients.items():
-            if key in old_gradients:
-                old_gradients[key] = old_gradients[key] + scale * val
+            if key in gradients:
+                gradients[key] = gradients[key] + scale * val
             else:
-                old_gradients[key] = scale * val
-    return old_gradients
+                gradients[key] = scale * val
+    return gradients
 
 
 def create_layers(layer_spec, data_dim, deterministic_layers=0,
@@ -241,34 +253,6 @@ class HelmholtzMachine(Initializable, Random):
         self.q_layers = q_layers
 
         self.children = p_layers + q_layers
-
-    def _initialize(self):
-        super(HelmholtzMachine, self)._initialize()
-
-        """
-        if not self.transpose_init:
-            return
-
-        p_layers = self.p_layers
-        q_layers = self.q_layers
-
-        for p, q in zip(p_layers[:-1], q_layers):
-            if not hasattr(p, 'mlp'):
-                continue
-            if not hasattr(q, 'mlp'):
-                continue
-
-            p_trafos = p.mlp.linear_transformations
-            q_trafos = q.mlp.linear_transformations
-
-            logger.info("Transposed initialization for %s" % p)
-            for ptrafo, qtrafo in zip(p_trafos, reversed(q_trafos)):
-                Wp = ptrafo.W.get_value()
-                Wq = qtrafo.W.get_value()
-
-                assert Wp.shape == Wq.T.shape
-                qtrafo.W.set_value(Wp.T)
-        """
 
 #-----------------------------------------------------------------------------
 
