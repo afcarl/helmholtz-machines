@@ -36,18 +36,18 @@ def map_tfd(batch):
     return np.cast[np.float32](batch/255.)
 
 
-def get_streams(data_name, batch_size):
+def get_streams(data_name, batch_size, small_batch_size=None):
+    if small_batch_size is None:
+        small_batch_size = max(1, batch_size // 10)
 
     if data_name == "mnist":
         map_fn = map_mnist
-    if data_name == "smnist":
+    elif data_name == "smnist":
         map_fn = sample_pixel
     elif data_name == "tfd":
         map_fn = map_tfd
     else:
         map_fn = None
-
-    small_batch_size = max(1, batch_size // 10)
 
     # Our usual train/valid/test data streams...
     x_dim, data_train, data_valid, data_test = get_data(data_name)
