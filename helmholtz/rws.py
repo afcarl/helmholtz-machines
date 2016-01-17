@@ -25,6 +25,7 @@ floatX = theano.config.floatX
 
 
 class ReweightedWakeSleep(HelmholtzMachine):
+
     def __init__(self, p_layers, q_layers, qbaseline=True, **kwargs):
         super(ReweightedWakeSleep, self).__init__(p_layers, q_layers, **kwargs)
 
@@ -36,9 +37,9 @@ class ReweightedWakeSleep(HelmholtzMachine):
         n_samples = samples[0].shape[0]
 
         log_p = [None] * n_layers
-        for l in xrange(n_layers-1):
-            log_p[l] = self.p_layers[l].log_prob(samples[l], samples[l+1])
-        log_p[n_layers-1] = self.p_layers[n_layers-1].log_prob(samples[n_layers-1])
+        for l in xrange(n_layers - 1):
+            log_p[l] = self.p_layers[l].log_prob(samples[l], samples[l + 1])
+        log_p[n_layers - 1] = self.p_layers[n_layers - 1].log_prob(samples[n_layers - 1])
 
         return log_p
 
@@ -49,8 +50,8 @@ class ReweightedWakeSleep(HelmholtzMachine):
 
         log_q = [None] * n_layers
         log_q[0] = tensor.zeros([n_samples])
-        for l in xrange(n_layers-1):
-            log_q[l+1] = self.q_layers[l].log_prob(samples[l+1], samples[l])
+        for l in xrange(n_layers - 1):
+            log_q[l + 1] = self.q_layers[l].log_prob(samples[l + 1], samples[l])
 
         return log_q
 
@@ -65,9 +66,9 @@ class ReweightedWakeSleep(HelmholtzMachine):
         samples = [None] * n_layers
         log_p = [None] * n_layers
 
-        samples[n_layers-1], log_p[n_layers-1] = p_layers[n_layers-1].sample(n_samples)
+        samples[n_layers - 1], log_p[n_layers - 1] = p_layers[n_layers - 1].sample(n_samples)
         for l in reversed(xrange(1, n_layers)):
-            samples[l-1], log_p[l-1] = p_layers[l-1].sample(samples[l])
+            samples[l - 1], log_p[l - 1] = p_layers[l - 1].sample(samples[l])
 
         # Get log_q
         log_q = self.log_prob_q(samples)
@@ -101,13 +102,13 @@ class ReweightedWakeSleep(HelmholtzMachine):
         # Generate samples (feed-forward)
         samples[0] = features
         log_q[0] = tensor.zeros([batch_size])
-        for l in xrange(n_layers-1):
-            samples[l+1], log_q[l+1] = q_layers[l].sample(samples[l])
+        for l in xrange(n_layers - 1):
+            samples[l + 1], log_q[l + 1] = q_layers[l].sample(samples[l])
 
         # get log-probs from generative model
-        log_p[n_layers-1] = p_layers[n_layers-1].log_prob(samples[n_layers-1])
+        log_p[n_layers - 1] = p_layers[n_layers - 1].log_prob(samples[n_layers - 1])
         for l in reversed(range(1, n_layers)):
-            log_p[l-1] = p_layers[l-1].log_prob(samples[l-1], samples[l])
+            log_p[l - 1] = p_layers[l - 1].log_prob(samples[l - 1], samples[l])
 
         return samples, log_p, log_q
 
@@ -124,9 +125,9 @@ class ReweightedWakeSleep(HelmholtzMachine):
         log_q_all = sum(log_q)   # This is the python sum over a list
 
         # Calculate sampling weights
-        log_pq = (log_p_all-log_q_all)
+        log_pq = (log_p_all - log_q_all)
         w_norm = logsumexp(log_pq, axis=1)
-        log_w = log_pq-tensor.shape_padright(w_norm)
+        log_w = log_pq - tensor.shape_padright(w_norm)
         w = tensor.exp(log_w)
 
         return w
@@ -151,7 +152,7 @@ class ReweightedWakeSleep(HelmholtzMachine):
         log_q_all = sum(log_q)
 
         # Approximate log(p(x))
-        log_px  = logsumexp(log_p_all-log_q_all, axis=-1) - tensor.log(n_samples)
+        log_px = logsumexp(log_p_all - log_q_all, axis=-1) - tensor.log(n_samples)
 
         return log_px, log_px
 
@@ -185,28 +186,35 @@ class ReweightedWakeSleep(HelmholtzMachine):
         log_q_all = sum(log_q)
 
         # Approximate log(p(x))
-        log_px  = logsumexp(log_p_all-log_q_all, axis=-1) - tensor.log(n_samples)
+        log_px = logsumexp(log_p_all - log_q_all, axis=-1) - tensor.log(n_samples)
 
         # Approximate log p(x) and calculate IS weights
         w = self.importance_weights(log_p, log_q)
 
         qbaseline = 0.
         if self.qbaseline:
-            qbaseline = 1./n_samples
+            qbaseline = 1. / n_samples
 
-        samples = flatten_values(samples, batch_size*n_samples)
-        wp = w.reshape( (batch_size*n_samples, ) )
-        wq = w.reshape( (batch_size*n_samples, ) ) - qbaseline
+        samples = flatten_values(samples, batch_size * n_samples)
+        wp = w.reshape((batch_size * n_samples, ))
+        wq = w.reshape((batch_size * n_samples, )) - qbaseline
 
         gradients = OrderedDict()
-        for l in xrange(n_layers-1):
-            gradients = merge_gradients(gradients, p_layers[l].get_gradients(samples[l], samples[l+1], weights=wp))
-            gradients = merge_gradients(gradients, q_layers[l].get_gradients(samples[l+1], samples[l], weights=wq), 0.5)
+        for l in xrange(n_layers - 1):
+            gradients = merge_gradients(gradients, p_layers[l].get_gradients(samples[l], samples[l + 1], weights=wp))
+            gradients = merge_gradients(
+                gradients,
+                q_layers[l].get_gradients(
+                    samples[
+                        l + 1],
+                    samples[l],
+                    weights=wq),
+                0.5)
         gradients = merge_gradients(gradients, p_layers[-1].get_gradients(samples[-1], weights=wp))
 
         # Now sleep phase..
         samples, log_p, log_q = self.sample_p(batch_size)
-        for l in xrange(n_layers-1):
-            gradients = merge_gradients(gradients, q_layers[l].get_gradients(samples[l+1], samples[l]), 0.5)
+        for l in xrange(n_layers - 1):
+            gradients = merge_gradients(gradients, q_layers[l].get_gradients(samples[l + 1], samples[l]), 0.5)
 
         return log_px, log_px, gradients
