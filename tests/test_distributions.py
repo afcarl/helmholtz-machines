@@ -53,3 +53,35 @@ def test_benoulli():
     print(grads)
 
     assert numpy.allclose(numpy.mean(samples, axis=0), prob, atol=0.1, rtol=0.1)
+
+
+def test_multinomial():
+    N_STREAMS=1024
+    theano_rng = MRG_RandomStreams(seed=2341)
+
+    n_samples = tensor.iscalar("n_samples")
+    pvals = tensor.vector('pvals')
+
+    shape = (n_samples, pvals.shape[0])
+    pvals2 = tensor.ones(shape) * pvals
+
+    samples = dist.Multinomial('auto')(pvals2, rng=theano_rng, nstreams=N_STREAMS)
+
+    do_sample = theano.function(
+                inputs=[pvals, n_samples],
+                outputs=samples,
+                allow_input_downcast=True, name="do_sample")
+
+    #-------------------------------------------------------------------------
+    pvals = numpy.array([0.1, 0.2, 0.2, 0.5])
+    n_samples = 10000
+
+    samples = do_sample(pvals, n_samples)
+    means = samples.mean(axis=0)
+
+    print("== samples =========")
+    print(samples)
+    print("== means =========")
+    print(means)
+
+    assert numpy.allclose(means, pvals, atol=0.1, rtol=0.1)
