@@ -58,7 +58,7 @@ from helmholtz.rws import ReweightedWakeSleep
 from helmholtz.vae import VAE
 
 from helmholtz.prob_layers import MultinomialLayer, MultinomialTopLayer
-from blocks.initialization import Uniform, IsotropicGaussian, Constant, Sparse 
+from blocks.initialization import Uniform, IsotropicGaussian, Constant, Sparse
 
 floatX = theano.config.floatX
 fuel.config.floatX = floatX
@@ -89,86 +89,13 @@ def main(args):
     lr_tag = float_tag(args.learning_rate)
 
     x_dim, y_dim, train_stream, valid_stream, test_stream = datasets.get_streams(args.data, args.batch_size)
-    print(train_stream.sources)
 
     #------------------------------------------------------------
     # Setup model
     deterministic_act = Tanh
     deterministic_size = 1.
 
-    if args.method == 'vae':
-        sizes_tag = args.layer_spec.replace(",", "-")
-        layer_sizes = [int(i) for i in args.layer_spec.split(",")]
-        layer_sizes, z_dim = layer_sizes[:-1], layer_sizes[-1]
-
-        name = "%s-%s-%s-lr%s-spl%d-%s" % \
-            (args.data, args.method, args.name, lr_tag, args.n_samples, sizes_tag)
-
-        if args.activation == "tanh":
-            hidden_act = Tanh()
-        elif args.activation == "logistic":
-            hidden_act = Logistic()
-        elif args.activation == "relu":
-            hidden_act = Rectifier()
-        else: 
-            raise "Unknown hidden nonlinearity %s" % args.hidden_act
-
-        model = VAE(x_dim=x_dim, hidden_layers=layer_sizes, hidden_act=hidden_act, z_dim=z_dim,
-                    batch_norm=args.batch_normalization)
-        model.initialize()
-    elif args.method == 'dvae':
-        sizes_tag = args.layer_spec.replace(",", "-")
-        layer_sizes = [int(i) for i in args.layer_spec.split(",")]
-        layer_sizes, z_dim = layer_sizes[:-1], layer_sizes[-1]
-
-        name = "%s-%s-%s-lr%s-spl%d-%s" % \
-            (args.data, args.method, args.name, lr_tag, args.n_samples, sizes_tag)
-
-        if args.activation == "tanh":
-            hidden_act = Tanh()
-        elif args.activation == "logistic":
-            hidden_act = Logistic()
-        elif args.activation == "relu":
-            hidden_act = Rectifier()
-        else: 
-            raise "Unknown hidden nonlinearity %s" % args.hidden_act
-
-        model = DVAE(x_dim=x_dim, hidden_layers=layer_sizes, hidden_act=hidden_act, z_dim=z_dim,
-                    batch_norm=args.batch_normalization)
-        model.initialize()
-    elif args.method == 'rws':
-        sizes_tag = args.layer_spec.replace(",", "-")
-        name = "%s-%s-%s-lr%s-dl%d-spl%d-%s" % \
-            (args.data, args.method, args.name, lr_tag, args.deterministic_layers, args.n_samples, sizes_tag)
-
-        p_layers, q_layers = create_layers(
-                                args.layer_spec, x_dim,
-                                args.deterministic_layers,
-                                deterministic_act, deterministic_size)
-
-        model = ReweightedWakeSleep(
-                p_layers,
-                q_layers,
-            )
-        model.initialize()
-    elif args.method == 'bihm-rws':
-        sizes_tag = args.layer_spec.replace(",", "-")
-        name = "%s-%s-%s-lr%s-dl%d-spl%d-%s" % \
-            (args.data, args.method, args.name, lr_tag, args.deterministic_layers, args.n_samples, sizes_tag)
-
-        p_layers, q_layers = create_layers(
-                                args.layer_spec, x_dim,
-                                args.deterministic_layers,
-                                deterministic_act, deterministic_size)
-
-        model = BiHM(
-                p_layers,
-                q_layers,
-                l1reg=args.l1reg,
-                l2reg=args.l2reg,
-            )
-        model.initialize()
-    elif args.method == 'semi-bihm':
+    if args.method == 'semi-bihm':
         sizes_tag = args.layer_spec.replace(",", "-")
         name = "%s-%s-%s-lr%s-dl%d-spl%d-%s" % \
             (args.data, args.method, args.name, lr_tag, args.deterministic_layers, args.n_samples, sizes_tag)
@@ -189,7 +116,7 @@ def main(args):
         top_p = MultinomialTopLayer(10, **inits)  # create top level P prior
         #top_p = bottom_p[-1]
         del bottom_p[-1]                          # remove the top layer P layer
-        
+
 
         model = SemiBiHM(bottom_p, bottom_q, top_p)
         model.initialize()
@@ -230,14 +157,15 @@ def main(args):
     train_monitors = []
     valid_monitors = []
     test_monitors = []
-    for s in [1, 10, 100, 1000]:
-        log_px, log_pygx = model.log_likelihood(x, y, mask, s)
+    for s in [1, 10, 100, ]:
+        log_px, log_pxy, log_pygx = model.log_likelihood(x, y, mask, s)
         #log_px, log_pygx = model.log_likelihood(x, s)
 
         log_px   = named(-log_px.mean(), "log_px_%d" % s)
+        log_pxy  = named(-log_pxy.sum() / mask.sum(), "log_pxy_%d" % s)
         log_pygx = named(-log_pygx.sum() / mask.sum(), "log_pygx_%d" % s)
 
-        test_monitors += [log_px, log_pygx]
+        test_monitors += [log_px, log_pxy, log_pygx]
 
 	### Jorgs old stuff ###
         # log_p, log_ph = model.log_likelihood(x, s)
@@ -250,76 +178,20 @@ def main(args):
     #------------------------------------------------------------
     # Gradient and training monitoring
 
-    if args.method in ['vae', 'dvae']:
-        log_p_bound = model.log_likelihood_bound(x, args.n_samples)
-        gradients = None
-        log_p_bound  = -log_p_bound.mean()
-        log_p_bound.name  = "log_p_bound"
-        cost = log_p_bound
-
-        train_monitors += [log_p_bound, named(model.kl_term.mean(), 'kl_term'), named(model.recons_term.mean(), 'recons_term')]
-        valid_monitors += [log_p_bound, named(model.kl_term.mean(), 'kl_term'), named(model.recons_term.mean(), 'recons_term')]
-        test_monitors  += [log_p_bound, named(model.kl_term.mean(), 'kl_term'), named(model.recons_term.mean(), 'recons_term')]
-    elif args.method == 'semi-bihm':
-        gradients, log_px, log_pygx = model.get_gradients(x, y, mask, args.n_samples)
+    if args.method == 'semi-bihm':
+        gradients, log_px, log_pxy, log_pygx = model.get_gradients(x, y, mask, args.n_samples)
 
         log_px   = named(-log_px.mean(), "log_px")
+        log_pxy  = named(-log_pxy.sum() / mask.sum(), "log_pxy")
         log_pygx = named(-log_pygx.sum() / mask.sum(), "log_pygx")
         cost = log_pygx
 
-        train_monitors = [log_px, log_pygx]
-        valid_monitors = [log_px, log_pygx]
+        train_monitors = [log_px, log_pxy, log_pygx]
+        valid_monitors = [log_px, log_pxy, log_pygx]
     else:
-        log_p, log_ph, gradients = model.get_gradients(x, args.n_samples)
-        log_p  = -log_p.mean()
-        log_ph = -log_ph.mean()
-        log_p.name  = "log_p"
-        log_ph.name = "log_ph"
-        cost = log_ph
+        raise ValueError("Unknown method")
 
-        train_monitors += [log_p, log_ph]
-        valid_monitors += [log_p, log_ph]
 
-    #------------------------------------------------------------
-    # Detailed monitoring
-    """
-    n_layers = len(p_layers)
-
-    log_px, w, log_p, log_q, samples = model.log_likelihood(x, n_samples)
-
-    exp_samples = []
-    for l in xrange(n_layers):
-        e = (w.dimshuffle(0, 1, 'x')*samples[l]).sum(axis=1)
-        e.name = "inference_h%d" % l
-        e.tag.aggregation_scheme = aggregation.TakeLast(e)
-        exp_samples.append(e)
-
-    s1 = samples[1]
-    sh1 = s1.shape
-    s1_ = s1.reshape([sh1[0]*sh1[1], sh1[2]])
-    s0, _ = model.p_layers[0].sample_expected(s1_)
-    s0 = s0.reshape([sh1[0], sh1[1], s0.shape[1]])
-    s0 = (w.dimshuffle(0, 1, 'x')*s0).sum(axis=1)
-    s0.name = "inference_h0^"
-    s0.tag.aggregation_scheme = aggregation.TakeLast(s0)
-    exp_samples.append(s0)
-
-    # Draw P-samples
-    p_samples, _, _ = model.sample_p(100)
-    #weights = model.importance_weights(samples)
-    #weights = weights / weights.sum()
-
-    for i, s in enumerate(p_samples):
-        s.name = "psamples_h%d" % i
-        s.tag.aggregation_scheme = aggregation.TakeLast(s)
-
-    #
-    samples = model.sample(100, oversample=100)
-
-    for i, s in enumerate(samples):
-        s.name = "samples_h%d" % i
-        s.tag.aggregation_scheme = aggregation.TakeLast(s)
-    """
     cg = ComputationGraph([cost])
 
     #------------------------------------------------------------
@@ -353,7 +225,6 @@ def main(args):
                        aggregation.mean(algorithm.total_step_norm)]
 
     #------------------------------------------------------------
-
 
     # Live plotting?
     plotting_extensions = []
@@ -409,7 +280,7 @@ def main(args):
                     #    every_n_epochs=half_lr),
                     TrackTheBest('valid_%s' % cost.name),
                     TrackTheBest('train_%s' % cost.name),
-                    Checkpoint(name+".pkl", save_separately=['log'], use_cpickle=True),
+                    Checkpoint(name+".pkl", save_separately=['log', 'model'], use_cpickle=True),
                     FinishIfNoImprovementAfter('valid_%s_best_so_far' % cost.name, epochs=args.patience),
                     FinishAfter(after_n_epochs=args.max_epochs),
                     Printing()] + plotting_extensions)
@@ -434,65 +305,17 @@ if __name__ == "__main__":
                 default=1e-3, help="Learning rate")
     parser.add_argument("--max-epochs", "--epochs", type=int, dest="max_epochs",
                 default=10000, help="Maximum # of training epochs to run")
-    parser.add_argument("--early-stopping", type=int, dest="patience", 
+    parser.add_argument("--early-stopping", type=int, dest="patience",
                 default=10, help="Number of epochs without improvement (default: 10)")
     subparsers = parser.add_subparsers(title="methods", dest="method")
 
     # Continue
     subparser = subparsers.add_parser("continue",
                 help="Variational Auto Encoder with Gaussian latents and Bernoulli observed")
-    subparser.add_argument("model_file", type=str, 
+    subparser.add_argument("model_file", type=str,
                 help="Model .pkl lto load and continue")
     subparser.add_argument("--nsamples", "-s", type=int, dest="n_samples",
                 default=10, help="Number of samples")
-
-    # Variational Autoencoder
-    subparser = subparsers.add_parser("vae",
-                help="Variational Auto Encoder with Gaussian latents and Bernoulli observed")
-    subparser.add_argument("--nsamples", "-s", type=int, dest="n_samples",
-                default=1, help="Number of samples")
-    subparser.add_argument("--activation", choices=['tanh', 'logistic', 'relu'], dest="activation",
-                default='relu', help="Activation function (last p(x|z) layer is always Logistic; default: relu)")
-    subparser.add_argument("--batch-normalization", "--batchnorm", action="store_true",
-                default=False, help="Use Batch normalization for encoder/decoder MLPs)")
-    subparser.add_argument("layer_spec", type=str, 
-                default="200,100", help="Comma seperated list of layer sizes (last is z-dim)")
-
-    # Descrete Variational Autoencoder
-    subparser = subparsers.add_parser("dvae",
-                help="Discrete Variational Auto Encoder with Bernoulli latents and observed")
-    subparser.add_argument("--nsamples", "-s", type=int, dest="n_samples",
-                default=1, help="Number of samples")
-    subparser.add_argument("--activation", choices=['tanh', 'logistic', 'relu'], dest="activation",
-                default='relu', help="Activation function (last p(x|z) layer is always Logistic; default: relu)")
-    subparser.add_argument("--batch-normalization", "--batchnorm", action="store_true",
-                default=False, help="Use Batch normalization for encoder/decoder MLPs)")
-    subparser.add_argument("layer_spec", type=str, 
-                default="200,100", help="Comma seperated list of layer sizes (last is z-dim)")
-
-    # Reweighted Wake-Sleep
-    subparser = subparsers.add_parser("rws",
-                help="Reweighted Wake-Sleep")
-    subparser.add_argument("--nsamples", "-s", type=int, dest="n_samples",
-                default=10, help="Number of IS samples")
-    subparser.add_argument("--deterministic-layers", type=int, dest="deterministic_layers",
-                default=0, help="Deterministic hidden layers per stochastic layer")
-    subparser.add_argument("layer_spec", type=str,
-                default="200,200,200", help="Comma seperated list of layer sizes")
-
-    # Bidirection HM
-    subparser = subparsers.add_parser("bihm-rws",
-                help="Bidirectional Helmholtz Machine with RWS")
-    subparser.add_argument("--nsamples", "-s", type=int, dest="n_samples",
-                default=10, help="Number of IS samples")
-    subparser.add_argument("--l1reg", type=float, dest="l1reg",
-                default=0.0, help="L1 regularization for weight matrices")
-    subparser.add_argument("--l2reg", type=float, dest="l2reg",
-                default=0.0, help="L2 regularization for weight matrices")
-    subparser.add_argument("--deterministic-layers", type=int, dest="deterministic_layers",
-                default=0, help="Deterministic hidden layers per stochastic layer")
-    subparser.add_argument("layer_spec", type=str,
-                default="200,200,200", help="Comma seperated list of layer sizes")
 
     # Semisupervised Bidirection HM
     subparser = subparsers.add_parser("semi-bihm",
@@ -505,6 +328,7 @@ if __name__ == "__main__":
                 default="", help="Comma seperated list of supervised layer sizes")
     subparser.add_argument("layer_spec", type=str,
                 default="200,200,200", help="Comma seperated list of layer sizes")
+
     args = parser.parse_args()
-    
+
     main(args)

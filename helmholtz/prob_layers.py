@@ -1,5 +1,5 @@
 
-from __future__ import division, print_function 
+from __future__ import division, print_function
 
 import logging
 
@@ -22,9 +22,7 @@ floatX = theano.config.floatX
 
 N_STREAMS = 2048
 
- 
 #-----------------------------------------------------------------------------
-
 
 class ProbabilisticTopLayer(Random):
     def __init__(self, **kwargs):
@@ -41,9 +39,9 @@ class ProbabilisticTopLayer(Random):
 
     def get_gradients(self, X, weights=1.):
         cost = -(weights * self.log_prob(X)).sum()
- 
+
         params = Selector(self).get_parameters()
-        
+
         gradients = OrderedDict()
         if isinstance(weights, float):
             for pname, param in params.iteritems():
@@ -51,35 +49,8 @@ class ProbabilisticTopLayer(Random):
         else:
             for pname, param in params.iteritems():
                 gradients[param] = tensor.grad(cost, param, consider_constant=[X, weights])
-            
+
         return gradients
-      
-    def get_gradients_list(self,X_un,X, weights , alpha   , beta  , gamma , expectation_term=False):
-        cost    = - (weights[1] * self.log_prob(X)).sum()
-        cost_un = -alpha * 0.5 *  (weights[0] * self.log_prob(X_un)).sum()
-        params = Selector(self).get_parameters()
-        w = [X,X_un, weights[0], weights[1]]
-        gradients = OrderedDict()
-        
-        if isinstance(weights, float):
-            for pname, param in params.iteritems():
-              if expectation_term:
-                gradients[param] =   tensor.grad(cost, param, consider_constant=w) + tensor.grad(cost_un, param, consider_constant=w)-beta *   tensor.grad(self.log_prob(X_un, Y_un).mean(), param, consider_constant=w)- gamma* tensor.grad(self.log_prob(X, Y).mean(), param, consider_constant=w)
-                
-              else:
-                gradients[param] =  tensor.grad(cost, param, consider_constant=w) + tensor.grad(cost_un, param, consider_constant=w)
-                print("ProbabilisticTopLayer get_gradients_list part 1")
-        else:
-            for pname, param in params.iteritems():
-              if expectation_term:
-                cost_exp  = - gamma* tensor.grad(self.log_prob(X, Y).mean(), param, consider_constant=w)
-                gradients[param] =   tensor.grad(cost, param, consider_constant=w)+   tensor.grad(cost_un, param, consider_constant=w)-beta *   tensor.grad(self.log_prob(X_un, Y_un).mean(), param, consider_constant=w)+cost_exp
-                
-              else:
-                gradients[param] =    tensor.grad(cost, param, consider_constant=w)+   tensor.grad(cost_un, param, consider_constant=w)
-        
-        return gradients
-      
 
 
 class ProbabilisticLayer(Random):
@@ -97,7 +68,7 @@ class ProbabilisticLayer(Random):
 
     def get_gradients(self, X, Y, weights=1.):
         cost = -(weights * self.log_prob(X, Y)).sum()
-        
+
         params = Selector(self).get_parameters()
 
         gradients = OrderedDict()
@@ -107,128 +78,11 @@ class ProbabilisticLayer(Random):
         else:
             for pname, param in params.iteritems():
                 gradients[param] = tensor.grad(cost, param, consider_constant=[X, Y, weights])
-            
-        return gradients
-      
-    def get_gradients_list(self,X_un, Y_un, X, Y, weights , alpha  , beta  ,gamma,expectation_term =False):
-        cost    = - (weights[1] * self.log_prob(X, Y)).sum()
-        cost_un = - alpha * 0.5 * (weights[0] * self.log_prob(X_un, Y_un)).sum()
-        
-        w = [X_un, Y_un, X, Y, weights[0], weights[1]]
-          
-        params = Selector(self).get_parameters()
-        
-        gradients = OrderedDict()
-        
-        if isinstance(weights, float):
-          
-            for pname, param in params.iteritems():
-              if expectation_term:
-                cost_exp =- gamma * tensor.grad(self.log_prob(X, Y).mean(), param, consider_constant=w)
-                gradients[param] = tensor.grad(cost, param, consider_constant=[X, Y]) + tensor.grad(cost_un, param, consider_constant=w)- beta * tensor.grad(self.log_prob(X_un, Y_un).mean(), param, consider_constant=w)  + cost_exp
-                
-              else:
-                gradients[param] = tensor.grad(cost, param, consider_constant=w) + tensor.grad(cost_un, param, consider_constant=w)
-                print("get_gradients_list part 1")
-           
-        else:
-            for pname, param in params.iteritems():
-              if expectation_term:      
-                cost_exp =- gamma * tensor.grad(self.log_prob(X, Y).mean(), param, consider_constant=w)
-                gradients[param] = tensor.grad(cost, param, consider_constant=w) + tensor.grad(cost_un, param, consider_constant=w) - beta * tensor.grad(self.log_prob(X_un, Y_un).mean(), param, consider_constant=w)+ cost_exp
-                
-              else: 
-                gradients[param] = tensor.grad(cost, param, consider_constant=w) + tensor.grad(cost_un, param, consider_constant=w)
-                 
-                
-        return gradients
-      
-    def get_gradients_list_h1_type3(self,samples_y_unsup, samples_y_sup, h1, weights , alpha  , beta   ,gamma ,expectation_term =False):
-        w_unsup = weights[0]
-        w_sup   = weights[1]     
-        cost_sup   = -(w_sup * self.log_prob(samples_y_sup, h1)).sum()
-        cost_unsup = -  alpha * 0.5 * (w_unsup * self.log_prob(samples_y_unsup, h1)).sum()
-           
-        params = Selector(self).get_parameters()
-        
-        gradients = OrderedDict()
-        w = [samples_y_sup, h1,samples_y_unsup,w_unsup,w_sup]
-        if isinstance(weights, float):
-          
-            for pname, param in params.iteritems():
-              if expectation_term:
-                grad_exp_sup =-  gamma* tensor.grad(self.log_prob(samples_y_sup, h1).mean(), param, consider_constant=w)
-                grad_exp_unsup =- beta * tensor.grad(self.log_prob(samples_y_unsup, h1).mean(), param, consider_constant=w)
-                
-                grad_sup =   tensor.grad(cost_sup, param, consider_constant=w)
-                grad_unsup =     tensor.grad(cost_unsup, param, consider_constant=w)
-                
-                gradients[param] = grad_unsup + grad_sup + grad_exp_unsup + grad_exp_sup
-                
-              else:
-                print("get_gradients_list_h1_type3 else part 1")
-                grad_sup =  tensor.grad(cost_sup, param, consider_constant=w)
-                grad_unsup =    tensor.grad(cost_unsup, param, consider_constant=w)
-                
-                gradients[param] = grad_unsup + grad_sup 
-        else:
-            for pname, param in params.iteritems():
-                if expectation_term:
-                  grad_exp_sup =-  gamma * tensor.grad(self.log_prob(samples_y_sup, h1).mean(), param, consider_constant=w)
-                  grad_exp_unsup =-  beta * tensor.grad(self.log_prob(samples_y_unsup, h1).mean(), param, consider_constant=w)
-                  
-                  grad_sup =  tensor.grad(cost_sup, param, consider_constant=w)
-                  grad_unsup =   tensor.grad(cost_unsup, param, consider_constant=w)
-                  
-                  gradients[param] = grad_unsup + grad_sup + grad_exp_unsup + grad_exp_sup
-                  
-                else:
-                  print("get_gradients_list_h1_type3 else part 2")
-                  grad_sup =   tensor.grad(cost_sup, param, consider_constant=w)
-                  grad_unsup =    tensor.grad(cost_unsup, param, consider_constant=w)
-                  
-                  gradients[param] = grad_unsup + grad_sup 
-                 
+
         return gradients
 
-    def get_gradients_list_h1(self, h_p, h_n, weights , alpha  , beta   ,gamma  ):
-        w_unsup = weights[0]
-        w_sup = weights[1]
-       
- 
-        cost_sup = -(w_sup * self.log_prob( h_p, h_n)).sum()
-        cost_unsup = -alpha*0.5 * (w_unsup * self.log_prob( h_p, h_n)).sum()
-          
-        params = Selector(self).get_parameters()
-        
-        gradients = OrderedDict()
-        w = [ h_p, h_n,w_unsup,w_sup]
-        if isinstance(weights, float):
-          
-            for pname, param in params.iteritems():
- 
-                
-                grad_sup =    tensor.grad(cost_sup, param, consider_constant=w)
-                grad_unsup =     tensor.grad(cost_unsup, param, consider_constant=w)
-                
-                gradients[param] = grad_unsup + grad_sup  
-        else:
-          
-           
-            for pname, param in params.iteritems():
- 
-                
-                grad_sup =    tensor.grad(cost_sup, param, consider_constant=w)
-                grad_unsup =      tensor.grad(cost_unsup, param, consider_constant=w)
-                
-                gradients[param] = grad_unsup + grad_sup  
-                 
-        return gradients
-      
-      
 
 #-----------------------------------------------------------------------------
-
 
 class BernoulliTopLayer(Initializable, ProbabilisticTopLayer):
     def __init__(self, dim_X, biases_init, **kwargs):
@@ -242,7 +96,7 @@ class BernoulliTopLayer(Initializable, ProbabilisticTopLayer):
         add_role(b, BIAS)
         self.parameters.append(b)
         self.add_auxiliary_variable(b.norm(2), name='b_norm')
-        
+
     def _initialize(self):
         b, = self.parameters
         self.biases_init.initialize(b, self.rng)
@@ -287,10 +141,10 @@ class BernoulliLayer(Initializable, ProbabilisticLayer):
         prob_X = self.sample_expected(Y)
         X = bernoulli(prob_X, rng=self.theano_rng, nstreams=N_STREAMS)
         return X, self.log_prob(X, Y)
-      
-    def sample_concatenate(self, h2, y):    
+
+    def sample_concatenate(self, h2, y):
 	H_concatenate = tensor.concatenate([h2, y], axis =1)
-	 
+
         prob_X = self.sample_expected(H_concatenate)
         X = bernoulli(prob_X, rng=self.theano_rng, nstreams=N_STREAMS)
         return X, self.log_prob(X, H_concatenate)
@@ -315,7 +169,7 @@ class GaussianTopLayer(Initializable, ProbabilisticTopLayer):
         b = shared_floatx_zeros((self.dim_X,), name='b')
         add_role(b, BIAS)
         self.parameters = [b]
-        
+
     def _initialize(self):
         b, = self.parameters
         self.biases_init.initialize(b, self.rng)
@@ -365,7 +219,7 @@ class GaussianLayerFixedSigma(Initializable, ProbabilisticLayer):
         self.sigma = sigma
 
         self.children = [self.mlp]
-        
+
 
     def _allocate(self):
         super(GaussianLayerFixedSigma, self)._allocate()
@@ -379,7 +233,7 @@ class GaussianLayerFixedSigma(Initializable, ProbabilisticLayer):
         add_role(self.b_mean, BIAS)
 
         self.parameters = [self.W_mean, self.b_mean]
-        
+
     def _initialize(self):
         super(GaussianLayerFixedSigma, self)._initialize()
 
@@ -404,7 +258,7 @@ class GaussianLayerFixedSigma(Initializable, ProbabilisticLayer):
 
         # Sample from mean-zeros std.-one Gaussian
         U = self.theano_rng.normal(
-                    size=mean.shape, 
+                    size=mean.shape,
                     avg=0., std=1.)
         # ... and scale/translate samples
         X = mean + tensor.exp(log_sigma) * U
@@ -450,7 +304,7 @@ class GaussianLayer(Initializable, ProbabilisticLayer):
         add_role(self.b_ls, BIAS)
 
         self.parameters = [self.W_mean, self.W_ls, self.b_mean, self.b_ls]
-        
+
     def _initialize(self):
         super(GaussianLayer, self)._initialize()
 
@@ -477,7 +331,7 @@ class GaussianLayer(Initializable, ProbabilisticLayer):
 
         # Sample from mean-zeros std.-one Gaussian
         U = self.theano_rng.normal(
-                    size=mean.shape, 
+                    size=mean.shape,
                     avg=0., std=1.)
         # ... and scale/translate samples
         X = mean + tensor.exp(log_sigma) * U
@@ -504,9 +358,9 @@ class GaussianLayer(Initializable, ProbabilisticLayer):
             cost = -weights.dimshuffle(0, 'x') * cost
 
         cost_scaled = sigma**2 * cost
-        cost_gscale = (sigma**2).sum(axis=1).dimshuffle([0, 'x'])   
+        cost_gscale = (sigma**2).sum(axis=1).dimshuffle([0, 'x'])
         cost_gscale = cost_gscale * cost
-        
+
         gradients = OrderedDict()
 
         params = Selector(self.mlp).get_parameters()
@@ -518,13 +372,13 @@ class GaussianLayer(Initializable, ProbabilisticLayer):
 
         gradients[W_ls] = tensor.grad(cost_scaled.sum(), W_ls, consider_constant=[X, Y])
         gradients[b_ls] = tensor.grad(cost_scaled.sum(), b_ls, consider_constant=[X, Y])
-            
+
         return gradients
-      
-      
+
+
 #------------------------------------------------------------------------------------
- 
- 
+
+
 class MultinomialTopLayer(Initializable, ProbabilisticTopLayer):
     def __init__(self, dim_X, biases_init, **kwargs):
         super(MultinomialTopLayer, self).__init__(**kwargs)
@@ -536,7 +390,7 @@ class MultinomialTopLayer(Initializable, ProbabilisticTopLayer):
         add_role(b, BIAS)
         self.parameters.append(b)
         self.add_auxiliary_variable(b.norm(2), name='b_norm')
-        
+
     def _initialize(self):
         b, = self.parameters
         self.biases_init.initialize(b, self.rng)
@@ -545,23 +399,21 @@ class MultinomialTopLayer(Initializable, ProbabilisticTopLayer):
     def log_prob(self, X): #x is the labels
         b = self.parameters[0]
         prob_X = tensor.nnet.softmax(b)
-        log_prob = X*tensor.log(prob_X)  
+        log_prob = X*tensor.log(prob_X)
         return log_prob.sum(axis=1)
 
+    @application(inputs=['n_samples'], outputs=['prob_X'])
     def sample_expected(self, n_samples):
         b = self.parameters[0]
         prob_X = tensor.nnet.softmax(b)
-        prob_X = tensor.zeros((n_samples, prob_X.shape[0])) + prob_X 
+        prob_X = tensor.zeros((n_samples, prob_X.shape[0])) + prob_X
         return prob_X
 
-    @application(outputs=['X', 'log_prob'])
+    @application(inputs=['n_samples'], outputs=['X', 'log_prob'])
     def sample(self, n_samples):
         prob_X = self.sample_expected(n_samples)
         X = Multinomial('auto')(prob_X, rng=self.theano_rng, nstreams=N_STREAMS)
         return X, self.log_prob(X)
-       
- 
-#------------------------------------------------------------------------------------
 
 
 class MultinomialLayer(Initializable, ProbabilisticLayer):
@@ -572,16 +424,19 @@ class MultinomialLayer(Initializable, ProbabilisticLayer):
         self.dim_X = mlp.output_dim
         self.dim_Y = mlp.input_dim
         self.children = [self.mlp]
- 
+
+    @application(inputs=['Y'], outputs=['prob_X'])
     def sample_expected(self, Y):
         return tensor.nnet.softmax(self.mlp.apply(Y))
- 
+
+    @application(inputs=['Y'], outputs=['X', 'log_prob'])
     def sample(self, Y):
         prob_X = self.sample_expected(Y)
         X = Multinomial('auto')(prob_X, rng=self.theano_rng, nstreams=N_STREAMS)
         return X , self.log_prob(X, Y)
 
+    @application(inputs=['X', 'Y'], outputs=['log_prob'])
     def log_prob(self, X, Y): #x is the labels
         prob_X = self.sample_expected(Y)
-        log_prob = X*tensor.log(prob_X) 
+        log_prob = X*tensor.log(prob_X)
         return log_prob.sum(axis=1)

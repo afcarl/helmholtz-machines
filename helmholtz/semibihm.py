@@ -1,5 +1,5 @@
 
-from __future__ import division, print_function 
+from __future__ import division, print_function
 
 import sys
 sys.path.append("../")
@@ -20,10 +20,10 @@ from blocks.graph import ComputationGraph
 from blocks.initialization import Uniform, IsotropicGaussian, Constant, Sparse, Identity
 from blocks.select import Selector
 from blocks.roles import PARAMETER
- 
+
 from initialization import RWSInitialization
 from helmholtz import HelmholtzMachine
-from helmholtz import merge_gradients, replicate_batch, logsumexp, flatten_values, unflatten_values 
+from helmholtz import merge_gradients, replicate_batch, logsumexp, flatten_values, unflatten_values
 from prob_layers import ProbabilisticTopLayer
 logger = logging.getLogger(__name__)
 floatX = theano.config.floatX
@@ -33,14 +33,14 @@ import numpy as np
 def layers_sample(layers, h):
     """ Sample from a stack of conditional probability layers.
 
-    Given a sequence of N layers and an activation for the 
-    bottom most activation, sample activations from the 
+    Given a sequence of N layers and an activation for the
+    bottom most activation, sample activations from the
     posteriors of all N layers.
 
     Parameters
     ----------
     layers : list of ProbabilisticLayers
-    h : Tensor 
+    h : Tensor
 
     Returns
     -------
@@ -94,7 +94,7 @@ def layers_get_gradients(layers, samples, weights):
         gradients = merge_gradients(gradients, layer.get_gradients(x, y, weights))
 
     return gradients
-    
+
 
 def rev(l):
     return l[::-1]
@@ -113,19 +113,21 @@ class SemiBiHM(HelmholtzMachine):
         self.bottom_q = bottom_q
         self.top_p = top_p
 
+        self.children = bottom_p + bottom_q + [top_p]
 
-    def get_gradients(self, x, y, mask, n_samples):
+    @application(inputs=["features", "labels", "mask", "n_samples"],
+                 outputs=["gradients", "log_px", "log_pxy", "log_pygx"])
+    def get_gradients(self, features, labels, mask, n_samples):
         bottom_p = self.bottom_p
         bottom_q = self.bottom_q
         n_layers = len(bottom_p)
         top_p = self.top_p
 
-        batch_size = x.shape[0]
-
+        batch_size = features.shape[0]
 
         # replicate everything
-        x = replicate_batch(x, n_samples)
-        y = replicate_batch(y, n_samples)
+        x = replicate_batch(features, n_samples)
+        y = replicate_batch(labels, n_samples)
         #m = replicate_batch(mask, n_samples)
         m = np.zeros(100*n_samples, dtype=np.uint8)
         m[0:10*n_samples] = 1
@@ -135,14 +137,14 @@ class SemiBiHM(HelmholtzMachine):
         a_log_probs_q = layers_log_prob(bottom_q, [x]+a_samples)
         a_log_probs_p = layers_log_prob(rev(bottom_p), rev([x]+a_samples))
         a_log_probs_p += [top_p.log_prob(a_samples[-1])]
-        
+
         a_log_omega = (sum(a_log_probs_p) - sum(a_log_probs_q)) / 2.
 
         # calculate ingredients for B(x, y)
         #b_samples = layers_sample(bottom_q, x)      # samples upwards from Q
         b_samples = list(a_samples)                 # make copy of samples
         b_samples[-1] = y                           # fix top level to training data
-        b_log_probs_q = layers_log_prob(bottom_q, [x]+b_samples)    
+        b_log_probs_q = layers_log_prob(bottom_q, [x]+b_samples)
         b_log_probs_p = layers_log_prob(rev(bottom_p), rev([x]+b_samples))
         b_log_probs_p += [top_p.log_prob(b_samples[-1])]
 
@@ -181,23 +183,26 @@ class SemiBiHM(HelmholtzMachine):
         log_b -= tensor.log(n_samples)
 
         log_px = 2*log_a
+        log_pxy = log_a + log_b
         log_pygx = log_b - log_a
         #log_pygx = tensor.switch(mask, log_b - log_a, 0)
 
-        return gradients, log_px, log_pygx
+        return gradients, log_px, log_pxy, log_pygx
 
+    @application(inputs=["features", "labels", "mask", "n_samples"],
+                 outputs=["log_px", "log_pxy", "log_pygx"])
     def log_likelihood(self, features, labels, mask, n_samples):
         """
             features:
             label:
             mask: is 1 for an example with label; 0 when without label
         """
-        _, log_px, log_pygx = self.get_gradients(features, labels, mask, n_samples)
+        _, log_px, log_pxy, log_pygx = self.get_gradients(features, labels, mask, n_samples)
 
-        return log_px, log_pygx
-        
+        return log_px, log_pxy, log_pygx
 
 
+    """
     def onehot(self, x, numclasses=10):
         if x.shape==():
             x = x[None]
@@ -210,3 +215,4 @@ class SemiBiHM(HelmholtzMachine):
             z[np.where(x==c)] = 1
             result[...,c] += z
         return result
+    """
