@@ -15,10 +15,10 @@ from theano import tensor
 from collections import OrderedDict
 
 from blocks.bricks.base import application, Brick, lazy
-from blocks.bricks import Random, Initializable, MLP, Tanh, Logistic, Identity  
+from blocks.bricks import Random, Initializable, MLP, Tanh, Logistic
 from blocks.filter import VariableFilter
 from blocks.graph import ComputationGraph
-from blocks.initialization import Uniform, IsotropicGaussian, Constant, Sparse 
+from blocks.initialization import Uniform, IsotropicGaussian, Constant, Sparse, Identity
 from blocks.select import Selector
 from blocks.roles import PARAMETER
 
@@ -35,6 +35,12 @@ def logsumexp(A, axis=None):
     B = tensor.log(tensor.sum(tensor.exp(A-A_max), axis=axis, keepdims=True))+A_max
     B = tensor.sum(B, axis=axis)
     return B
+
+
+def logplusexp(a, b):
+    """ Compute a numerically stable log(exp(a)+exp(b)) """
+    m = tensor.maximum(a, b)
+    return tensor.log(tensor.exp(a-m) + tensor.exp(b-m)) + m
 
 
 def replicate_batch(A, repeat):

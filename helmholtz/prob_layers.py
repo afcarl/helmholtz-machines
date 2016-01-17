@@ -396,24 +396,28 @@ class MultinomialTopLayer(Initializable, ProbabilisticTopLayer):
         self.biases_init.initialize(b, self.rng)
 
     @application(inputs=['X'], outputs=['log_prob'])
-    def log_prob(self, X): #x is the labels
+    def log_prob(self, X):
         b = self.parameters[0]
         prob_X = tensor.nnet.softmax(b)
         log_prob = X*tensor.log(prob_X)
         return log_prob.sum(axis=1)
 
-    @application(inputs=['n_samples'], outputs=['prob_X'])
+    @application(outputs=['X_expected'], inputs=['n_samples'])
     def sample_expected(self, n_samples):
         b = self.parameters[0]
         prob_X = tensor.nnet.softmax(b)
         prob_X = tensor.zeros((n_samples, prob_X.shape[0])) + prob_X
         return prob_X
 
+
     @application(inputs=['n_samples'], outputs=['X', 'log_prob'])
     def sample(self, n_samples):
         prob_X = self.sample_expected(n_samples)
         X = Multinomial('auto')(prob_X, rng=self.theano_rng, nstreams=N_STREAMS)
         return X, self.log_prob(X)
+
+
+#------------------------------------------------------------------------------------
 
 
 class MultinomialLayer(Initializable, ProbabilisticLayer):
@@ -425,15 +429,18 @@ class MultinomialLayer(Initializable, ProbabilisticLayer):
         self.dim_Y = mlp.input_dim
         self.children = [self.mlp]
 
-    @application(inputs=['Y'], outputs=['prob_X'])
+
+    @application(inputs='Y', outputs=['X_expected'])
     def sample_expected(self, Y):
         return tensor.nnet.softmax(self.mlp.apply(Y))
 
-    @application(inputs=['Y'], outputs=['X', 'log_prob'])
+
+    @application(inputs='Y', outputs=['X', 'log_prob'])
     def sample(self, Y):
         prob_X = self.sample_expected(Y)
         X = Multinomial('auto')(prob_X, rng=self.theano_rng, nstreams=N_STREAMS)
         return X , self.log_prob(X, Y)
+
 
     @application(inputs=['X', 'Y'], outputs=['log_prob'])
     def log_prob(self, X, Y): #x is the labels
