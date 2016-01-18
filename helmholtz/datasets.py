@@ -8,7 +8,7 @@ from fuel.streams import DataStream
 from fuel.transformers import Flatten, SourcewiseTransformer
 
 local_datasets = ["adult", "dna", "web", "nips", "mushrooms", "ocr_letters", "connect4", "rcv1"]
-supported_datasets = local_datasets + ['mnist', 'smnist', 'bmnist', 'bars', 'silhouettes', 'tfd']
+supported_datasets = local_datasets + ['mnist', 'smnist', 'bmnist', 'bars', 'silhouettes']
 
 # 'tfd' is missing but needs normalization
 
