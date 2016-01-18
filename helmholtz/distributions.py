@@ -8,7 +8,7 @@ import theano
 import theano.tensor as tensor
 import theano.tensor as T
 
-import numpy as np
+import numpy
 
 from theano.sandbox.rng_mrg import MRG_RandomStreams
 from theano.tensor.opt import register_canonicalize, register_specialize
@@ -111,7 +111,7 @@ class Multinomial(theano.Op):
     def make_node(self, pvals,   rng = theano_rng, nstreams=None):
 
         nb_outcomes = pvals.shape[0]
-        unis = rng.uniform(size =  (1,nb_outcomes) , low=0.0, high=1.0 )#np.random.uniform(size =  (1,pvals.shape[1]) , low=0.0, high=1.0 )
+        unis = rng.uniform(size =  (1,nb_outcomes) , low=0.0, high=1.0 )#numpy.random.uniform(size =  (1,pvals.shape[1]) , low=0.0, high=1.0 )
         pvals = tensor.as_tensor_variable(pvals)
 
         unis = tensor.as_tensor_variable(unis[0])
@@ -266,13 +266,13 @@ if __name__ == "__main__":
 
     #-------------------------------------------------------------------------
     n_samples = 10000
-    prob = np.linspace(0, 1, 10)
+    prob = numpy.linspace(0, 1, 10)
     target_prob = prob
 
     samples, grads = do_sample(prob, target_prob, n_samples)
     print("== samples =========")
     print(samples)
     print("== mean ============")
-    print(np.mean(samples, axis=0))
+    print(numpy.mean(samples, axis=0))
     print("== grads ===========")
     print(grads)
