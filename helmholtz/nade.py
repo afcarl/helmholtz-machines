@@ -43,11 +43,11 @@ class NADETopLayer(Initializable, ProbabilisticTopLayer):
         self.dim_H = dim_H
 
     def _allocate(self):
-        self.b = shared_floatx_zeros((self.dim_X,), name="d") # visible bias
+        self.b = shared_floatx_zeros((self.dim_X,), name="b") # visible bias
         self.c = shared_floatx_zeros((self.dim_H,), name="c") # hidden bias
         self.W = shared_floatx_zeros((self.dim_X, self.dim_H), name="W") # encoder weights
         self.V = shared_floatx_zeros((self.dim_H, self.dim_X), name="W") # encoder weights
-        #self.children = [self.b, self.c, self.W, self.V]
+        self.parameters = [self.b, self.c, self.W, self.V]
 
     def _initialize(self):
         self.biases_init.initialize(self.b, self.rng)
@@ -57,7 +57,7 @@ class NADETopLayer(Initializable, ProbabilisticTopLayer):
 
     @application(outputs=['X_expected'])
     def sample_expected(self, n_samples):
-        raise "not really!"
+        raise NotImplemented
 
     @application(outputs=['X', 'log_prob'])
     def sample(self, n_samples):
