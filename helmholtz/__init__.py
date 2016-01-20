@@ -143,9 +143,9 @@ def merge_gradients(gradients, more_gradients, scale=1.):
     if isinstance(more_gradients, (dict, OrderedDict)):
         more_gradients = [more_gradients]
 
-    for gradients in more_gradients:
-        assert isinstance(gradients, (dict, OrderedDict))
-        for key, val in gradients.items():
+    for grad_dict in more_gradients:
+        assert isinstance(grad_dict, (dict, OrderedDict))
+        for key, val in grad_dict.items():
             if key in gradients:
                 gradients[key] = gradients[key] + scale * val
             else:

@@ -4,15 +4,8 @@ import theano
 import unittest
 
 from blocks.bricks import MLP, Logistic
-from blocks.filter import VariableFilter
-from blocks.graph import ComputationGraph
-from blocks.initialization import Uniform, IsotropicGaussian, Constant
-from blocks.select import Selector
-from blocks.roles import PARAMETER
+from blocks.initialization import IsotropicGaussian, Constant
 
-from collections import OrderedDict
-
-from helmholtz.initialization import RWSInitialization
 from helmholtz.prob_layers import *
 
 floatX = theano.config.floatX
@@ -24,6 +17,7 @@ inits = {
 }
 
 #---------------------------------------------------------------------------
+
 
 def test_benoulli_top_layer():
     # Setup layer
