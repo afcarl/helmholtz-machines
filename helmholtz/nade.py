@@ -120,11 +120,10 @@ class NADETopLayer(Initializable, ProbabilisticTopLayer):
             a    = a + tensor.outer(vis_i, Wi)
             return a, post
 
-        [a, post], updates = unrolled_scan(
+        [a, post], updates = theano.scan(
                     fn=one_iter,
                     sequences=[vis.T, W, V.T, b],
                     outputs_info=[a_init, post_init],
-                    unroll=self.unroll_scan
                 )
         assert len(updates) == 0
         return post[-1,:]

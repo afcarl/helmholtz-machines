@@ -31,20 +31,33 @@ def test_nade_top_layer():
     l = NADETopLayer(dim_x, name="layer", **inits)
     l.initialize()
 
+    # Test sample
     n_samples = tensor.iscalar('n_samples')
-    #x_expected = l.sample_expected(n_samples)
     x, x_log_prob = l.sample(n_samples)
 
-    do = theano.function([n_samples],
-                         [x, x_log_prob],
-                         allow_input_downcast=True)
+    do_sample = theano.function([n_samples],
+                                [x, x_log_prob],
+                                allow_input_downcast=True)
 
-    x, x_log_prob = do(10)
+    a, a_log_prob = do_sample(10)
 
     #assert x_expected.shape == (dim_x,)
-    assert x.shape == (10, dim_x)
-    assert x_log_prob.shape == (10,)
+    assert a.shape == (10, dim_x)
+    assert a_log_prob.shape == (10,)
 
+
+    # Test log_prob
+    x = tensor.fmatrix('x')
+    x_log_prob = l.log_prob(x)
+
+    do_prob = theano.function([x],
+                              x_log_prob,
+                              allow_input_downcast=True)
+
+    b_log_prob = do_prob(a)
+
+    assert b_log_prob.shape == (10,)
+    assert numpy.allclose(a_log_prob, b_log_prob)
 
 # def test_benoulli_layer():
 #     # Setup layer
