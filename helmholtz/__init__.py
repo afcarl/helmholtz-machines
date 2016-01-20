@@ -240,17 +240,17 @@ def create_layers(layer_spec, data_dim, deterministic_layers=0,
                     **inits),
                 name="q_layer%d" % l))
 
-    p_layers.append(
-        BernoulliTopLayer(
-            layer_sizes[-1],
-            name="p_top_layer",
-            **inits))
+    # p_layers.append(
+    #     BernoulliTopLayer(
+    #         layer_sizes[-1],
+    #         name="p_top_layer",
+    #         **inits))
 
-    #p_layers.append(
-    #    NADETopLayer(
-    #        layer_sizes[-1],
-    #        name="p_top_layer",
-    #        **inits))
+    p_layers.append(
+       NADETopLayer(
+           layer_sizes[-1],
+           name="p_top_layer",
+           **inits))
 
 
     return p_layers, q_layers
