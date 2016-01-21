@@ -19,30 +19,29 @@ from fuel.streams import AbstractDataStream
 def ceildiv(a, b):
     return -(-a // b)
 
-def mnist_subset(n_labeled, which_sets=None):
-    """Split MNIST into an labeled and an unlabeled subset.
+def mnist_subset(dataset, n_labeled):
+    """Split a dataset into an labeled and an unlabeled subset.
 
     Parameters
     ----------
+    dataset : DataSet
     n_labeled : int
         size of labeled subset
 
     Returns
     -------
-    tuple of MNIST
+    (labeled, unlabeled)
+        Two subsets. 
     """
-    if which_sets is None:
-        which_sets = ('train',)
-
-    mnist = MNIST(which_sets)
-    mnist.open()
+    state = dataset.open()
 
     n_labaled_per_class = n_labeled // 10
-    n_total = mnist.num_examples
+    n_total = dataset.num_examples
 
-    features, labels = mnist.get_data(None, slice(0, n_total))
+    features, labels = dataset.get_data(state, slice(0, n_total))
+    dataset.close(state)
 
-    features = features / 255.
+    features = features / features.max()
 
     labeled_idx = []
     unlabeled_idx = []
@@ -57,13 +56,13 @@ def mnist_subset(n_labeled, which_sets=None):
 
     unlabeled_data = OrderedDict([
         ('features', features[unlabeled_idx]),
-        ('labels', labels[unlabeled_idx]),
+        ('targets', labels[unlabeled_idx]),
         ('mask', numpy.zeros(len(unlabeled_idx))),
     ])
 
     labeled_data = OrderedDict([
         ('features', features[labeled_idx]),
-        ('labels', labels[labeled_idx]),
+        ('targets', labels[labeled_idx]),
         ('mask', numpy.ones(len(labeled_idx))),
     ])
 
@@ -143,6 +142,10 @@ class SemisupervisedDataStream(AbstractDataStream):
         self.ds_states = [ds.open() for ds in self.datasets]
 
     @property
+    def produces_examples(self):
+        return False
+
+    @property
     def sources(self):
         return self.datasets[0].sources
 
@@ -166,14 +169,13 @@ class SemisupervisedDataStream(AbstractDataStream):
 
 
 if __name__ == "__main__":
-    labeled, unlabeled = mnist_subset(1000)
+    mnist = MNIST()
+    labeled, unlabeled = mnist_subset(mnist, 1000)
 
     print("Size of labeled subset:   %d" % labeled.num_examples)
     print("Size of unlabeled subset: %d" % unlabeled.num_examples)
 
     stream = SemisupervisedDataStream(datasets=(labeled, unlabeled), batch_size=(50, 50))
-
-    #ipdb.set_trace()
 
     for i, batch in enumerate(stream.get_epoch_iterator(as_dict=True)):
         print(i)

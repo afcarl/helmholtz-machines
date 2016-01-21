@@ -1,10 +1,13 @@
 
 import unittest
 
+from fuel.datasets.mnist import MNIST
 from fuel_extras.semisupervised import *
 
+
 def test_shape():
-    labeled, unlabeled = mnist_subset(1000)
+    dataset = MNIST(which_sets=('train',))
+    labeled, unlabeled = mnist_subset(dataset, 1000)
     stream = SemisupervisedDataStream(datasets=(labeled, unlabeled), batch_size=(50, 50))
     it = stream.get_epoch_iterator(as_dict=True)
     batch = next(it)
@@ -15,7 +18,8 @@ def test_shape():
         assert val.shape[0] == 100
 
 def test_count():
-    labeled, unlabeled = mnist_subset(1000)
+    dataset = MNIST(which_sets=('train',))
+    labeled, unlabeled = mnist_subset(dataset, 1000)
     stream = SemisupervisedDataStream(datasets=(labeled, unlabeled), batch_size=(50, 50))
 
     total_batches = 0
