@@ -48,7 +48,7 @@ class NADETopLayer(Initializable, ProbabilisticTopLayer):
         self.b = shared_floatx_zeros((self.dim_X,), name="b") # visible bias
         self.c = shared_floatx_zeros((self.dim_H,), name="c") # hidden bias
         self.W = shared_floatx_zeros((self.dim_X, self.dim_H), name="W") # encoder weights
-        self.V = shared_floatx_zeros((self.dim_H, self.dim_X), name="W") # encoder weights
+        self.V = shared_floatx_zeros((self.dim_H, self.dim_X), name="V") # encoder weights
         self.parameters = [self.b, self.c, self.W, self.V]
 
     def _initialize(self):

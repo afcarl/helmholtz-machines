@@ -252,7 +252,6 @@ def create_layers(layer_spec, data_dim, deterministic_layers=0,
            name="p_top_layer",
            **inits))
 
-
     return p_layers, q_layers
 
 #-----------------------------------------------------------------------------
