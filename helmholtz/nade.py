@@ -26,8 +26,10 @@ theano_rng = MRG_RandomStreams(seed=2341)
 N_STREAMS = 2048
 
 
+sigmoid_fringe = 1e-6
+
 def sigmoid(val):
-    return nnet.sigmoid(val)
+    return nnet.sigmoid(val).clip(sigmoid_fringe, 1.-sigmoid_fringe)
 
 #------------------------------------------------------------------------------
 
