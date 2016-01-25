@@ -192,12 +192,14 @@ def main(args):
 
     #------------------------------------------------------------
 
+    mask = tensor.matrix('mask').astype('int32')
+
     x = tensor.matrix('features').astype('float32')
     x = x.reshape((args.batch_size,x_dim ))
     y = tensor.matrix('targets').astype('float32')
     y = y.reshape((args.batch_size,y_dim ))
 
-    mask = np.ones((args.batch_size,1)).astype('int32')# tensor.col('mask', dtype='int32')
+    #mask = np.ones((args.batch_size,1)).astype('int32')# tensor.col('mask', dtype='int32')
 
 
     #------------------------------------------------------------
