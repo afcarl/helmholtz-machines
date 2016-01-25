@@ -20,7 +20,8 @@ supported_datasets = ['mnist', 'lbmnist']
 def get_streams(data_name, n_labeled, batch_size, small_batch_size=None):
     # Our usual train/valid/test data streams...
     if small_batch_size is None:
-        small_batch_size = max(1, batch_size // 10)
+        small_batch_size = batch_size
+        #small_batch_size = max(1, batch_size // 10)
 
     if data_name == "mnist":
         from fuel.datasets.mnist import MNIST
