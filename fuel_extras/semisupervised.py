@@ -41,7 +41,8 @@ def mnist_subset(dataset, n_labeled):
     features, labels = dataset.get_data(state, slice(0, n_total))
     dataset.close(state)
 
-    features = features / features.max()
+    features = numpy.cast[numpy.float32](features / features.max())
+    #labels = numpy.cast[numpy.float32](labels)
 
     labeled_idx = []
     unlabeled_idx = []
@@ -53,17 +54,16 @@ def mnist_subset(dataset, n_labeled):
     labeled_idx = numpy.sort(numpy.concatenate(labeled_idx))
     unlabeled_idx = numpy.sort(numpy.concatenate(unlabeled_idx))
 
-
     unlabeled_data = OrderedDict([
         ('features', features[unlabeled_idx]),
         ('targets', labels[unlabeled_idx]),
-        ('mask', numpy.zeros(len(unlabeled_idx))),
+        ('mask', numpy.zeros((len(unlabeled_idx), 1), dtype='int32')),
     ])
 
     labeled_data = OrderedDict([
         ('features', features[labeled_idx]),
         ('targets', labels[labeled_idx]),
-        ('mask', numpy.ones(len(labeled_idx))),
+        ('mask', numpy.ones((len(labeled_idx), 1), dtype='int32')),
     ])
 
     labeled = IndexableDataset(labeled_data)

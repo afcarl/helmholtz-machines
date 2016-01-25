@@ -14,9 +14,8 @@ class OneHot(SourcewiseTransformer):
     #    return numpy.asarray(source_example).flatten()
 
     def transform_source_batch(self, source_batch, _):
-
         batch_size = source_batch.shape[0]
 
         one_hot = numpy.zeros((batch_size, self.n_labels), dtype=numpy.float32)
         one_hot[numpy.arange(batch_size),source_batch[:,0]] = 1
-        return one_hot
+        return numpy.cast[numpy.float32](one_hot)

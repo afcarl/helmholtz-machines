@@ -129,9 +129,10 @@ class SemiBiHM(HelmholtzMachine):
         # replicate everything
         x = replicate_batch(x, n_samples)
         y = replicate_batch(y, n_samples)
-        #m = replicate_batch(mask, n_samples)
-        m = np.zeros(100*n_samples, dtype=np.uint8)
-        m[0:50*n_samples] = 1
+        m = replicate_batch(mask, n_samples)
+        m = m.reshape((n_samples*batch_size, ))
+        #m = np.zeros(100*n_samples, dtype=np.uint8)
+        #m[0:50*n_samples] = 1
 
         # calculate ingredients for A(x)
         a_samples = layers_sample(bottom_q, x)      # samples upwards from Q

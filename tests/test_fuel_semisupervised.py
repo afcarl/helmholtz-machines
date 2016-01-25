@@ -1,4 +1,6 @@
 
+from __future__ import division, print_function
+
 import unittest
 
 from fuel.datasets.mnist import MNIST
@@ -12,10 +14,11 @@ def test_shape():
     it = stream.get_epoch_iterator(as_dict=True)
     batch = next(it)
 
-    print(batch.keys)
+    print(batch.keys())
 
     for key, val in batch.items():
         assert val.shape[0] == 100
+        print("%s: %s" % (key, val.shape))
 
 def test_count():
     dataset = MNIST(which_sets=('train',))
