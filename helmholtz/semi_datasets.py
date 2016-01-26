@@ -5,19 +5,80 @@ import numpy as np
 
 from collections import OrderedDict
 
+from six.moves import xrange
+
 from fuel.datasets.base import IndexableDataset
 from fuel.datasets.mnist import MNIST
 from fuel.schemes import ShuffledScheme, SequentialScheme
 from fuel.streams import DataStream
 from fuel.transformers import Flatten, SourcewiseTransformer
 
-from fuel_extras.semisupervised import mnist_subset, SemisupervisedDataStream
+from fuel_extras.semisupervised import SemisupervisedDataStream
 from fuel_extras.onehot import OneHot
 
-supported_datasets = ['mnist', 'lbmnist']
+supported_datasets = ['mnist']
+
+
+def mnist_subset(dataset, n_labeled):
+    """Split a dataset into an labeled and an unlabeled subset.
+
+    Parameters
+    ----------
+    dataset : DataSet
+    n_labeled : int
+        size of labeled subset
+
+    Returns
+    -------
+    (labeled, unlabeled)
+        Two subsets. 
+    """
+    state = dataset.open()
+
+    n_labaled_per_class = n_labeled // 10
+    n_total = dataset.num_examples
+
+    features, labels = dataset.get_data(state, slice(0, n_total))
+    dataset.close(state)
+
+    features = np.cast[np.float32](features / features.max())
+    #labels = np.cast[np.float32](labels)
+
+    labeled_idx = []
+    unlabeled_idx = []
+    for c in xrange(10):
+        cidx = np.where(labels == c)[0]
+        labeled_idx.append(cidx[:n_labaled_per_class])
+        unlabeled_idx.append(cidx[n_labaled_per_class:])
+
+    labeled_idx = np.sort(np.concatenate(labeled_idx))
+    unlabeled_idx = np.sort(np.concatenate(unlabeled_idx))
+
+    unlabeled_data = OrderedDict([
+        ('features', features[unlabeled_idx]),
+        ('targets', labels[unlabeled_idx]),
+        ('mask', np.zeros((len(unlabeled_idx), 1), dtype='int32')),
+    ])
+
+    labeled_data = OrderedDict([
+        ('features', features[labeled_idx]),
+        ('targets', labels[labeled_idx]),
+        ('mask', np.ones((len(labeled_idx), 1), dtype='int32')),
+    ])
+
+    labeled = IndexableDataset(labeled_data)
+    unlabeled = IndexableDataset(unlabeled_data)
+
+    return labeled, unlabeled
 
 
 def get_streams(data_name, n_labeled, batch_size, small_batch_size=None):
+    """
+
+    Returns
+    -------
+    x_dim, y_sim, stream_train, stream_valid, stream_test
+    """
     # Our usual train/valid/test data streams...
     if small_batch_size is None:
         small_batch_size = batch_size
@@ -87,7 +148,5 @@ def get_streams(data_name, n_labeled, batch_size, small_batch_size=None):
         del state, features, labels, test_data, data_test
 
         return 28 * 28, 10, train_stream, valid_stream, test_stream
-    elif data_name == "lbmnist":
-        raise ValueError
     else:
         raise ValueError

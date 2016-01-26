@@ -4,6 +4,8 @@ from __future__ import division, print_function
 import unittest
 
 from fuel.datasets.mnist import MNIST
+
+from helmholtz.semi_datasets import mnist_subset
 from fuel_extras.semisupervised import *
 
 

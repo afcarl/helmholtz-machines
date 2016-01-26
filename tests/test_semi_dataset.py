@@ -28,16 +28,3 @@ def test_mnist():
         assert mask.shape == (100, 1)
 
         num_batches = num_batches + 1
-
-    import ipdb; ipdb.set_trace()
-
-
-#def test_lbmnist():
-#    x_dim, y_dim, train_stream, valid_stream, test_stream = get_streams('lbmnist', 100, 100)
-#
-#    it = train_stream.get_epoch_iterator()
-#    features, targets, mask = next(it)
-#
-#    print features.shape
-#    print targets.shape
-#    print mask.shape

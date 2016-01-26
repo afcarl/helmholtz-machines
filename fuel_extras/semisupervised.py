@@ -6,70 +6,16 @@ import six
 import ipdb
 import numpy
 
-from collections import OrderedDict, Iterable
-from picklable_itertools import chain, cycle, imap
+from collections import Iterable
+
+from picklable_itertools import cycle
 from picklable_itertools.extras import partition_all
-from six.moves import xrange
 
 from fuel.streams import DataStream
-from fuel.datasets.base import IndexableDataset
-from fuel.datasets.mnist import MNIST
 from fuel.streams import AbstractDataStream
 
 def ceildiv(a, b):
     return -(-a // b)
-
-def mnist_subset(dataset, n_labeled):
-    """Split a dataset into an labeled and an unlabeled subset.
-
-    Parameters
-    ----------
-    dataset : DataSet
-    n_labeled : int
-        size of labeled subset
-
-    Returns
-    -------
-    (labeled, unlabeled)
-        Two subsets. 
-    """
-    state = dataset.open()
-
-    n_labaled_per_class = n_labeled // 10
-    n_total = dataset.num_examples
-
-    features, labels = dataset.get_data(state, slice(0, n_total))
-    dataset.close(state)
-
-    features = numpy.cast[numpy.float32](features / features.max())
-    #labels = numpy.cast[numpy.float32](labels)
-
-    labeled_idx = []
-    unlabeled_idx = []
-    for c in xrange(10):
-        cidx = numpy.where(labels == c)[0]
-        labeled_idx.append(cidx[:n_labaled_per_class])
-        unlabeled_idx.append(cidx[n_labaled_per_class:])
-
-    labeled_idx = numpy.sort(numpy.concatenate(labeled_idx))
-    unlabeled_idx = numpy.sort(numpy.concatenate(unlabeled_idx))
-
-    unlabeled_data = OrderedDict([
-        ('features', features[unlabeled_idx]),
-        ('targets', labels[unlabeled_idx]),
-        ('mask', numpy.zeros((len(unlabeled_idx), 1), dtype='int32')),
-    ])
-
-    labeled_data = OrderedDict([
-        ('features', features[labeled_idx]),
-        ('targets', labels[labeled_idx]),
-        ('mask', numpy.ones((len(labeled_idx), 1), dtype='int32')),
-    ])
-
-    labeled = IndexableDataset(labeled_data)
-    unlabeled = IndexableDataset(unlabeled_data)
-
-    return labeled, unlabeled
 
 
 class SemisupervisedDataIterator(six.Iterator):
@@ -164,18 +110,3 @@ class SemisupervisedDataStream(AbstractDataStream):
 
     def get_epoch_iterator(self, as_dict=False):
         return SemisupervisedDataIterator(self, batch_size=self.batch_size, as_dict=as_dict)
-
-#----------------------------------------------------------------------------
-
-
-if __name__ == "__main__":
-    mnist = MNIST()
-    labeled, unlabeled = mnist_subset(mnist, 1000)
-
-    print("Size of labeled subset:   %d" % labeled.num_examples)
-    print("Size of unlabeled subset: %d" % unlabeled.num_examples)
-
-    stream = SemisupervisedDataStream(datasets=(labeled, unlabeled), batch_size=(50, 50))
-
-    for i, batch in enumerate(stream.get_epoch_iterator(as_dict=True)):
-        print(i)
