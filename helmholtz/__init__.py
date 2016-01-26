@@ -123,19 +123,26 @@ def unflatten_values(vals, batch_size, n_samples):
 
 
 def merge_gradients(gradients, more_gradients, scale=1.):
-    """Take and merge multiple ordered dicts
+    """Merge two ordered dicts.
 
-
+    Matching entries in both dictionaries are added together; potentially applying a scaling
+    factor to the second argument.
 
     Parameters
     ----------
     gradients : dict
-    more_gradients : dict
+        Dictinary with gradients. Keys are Theano shared variables, values are corresponding
+        updates.
+    more_gradients : dict or
 
+    scale : Optional[float]
+        Scalar to scale all the gradients in more_gradients.
 
     Returns
     -------
     dict
+        Dictionary with merged gardients
+
     """
     if isinstance(more_gradients, (dict, OrderedDict)):
         more_gradients = [more_gradients]
