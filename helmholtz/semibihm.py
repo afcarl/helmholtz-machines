@@ -113,26 +113,28 @@ class SemiBiHM(HelmholtzMachine):
         self.bottom_q = bottom_q
         self.top_p = top_p
 
+        self.px_weight = 1.0
+
         self.children = bottom_p + bottom_q + [top_p]
 
 
-    @application(inputs=['x', 'y', 'mask', 'n_samples'], outputs=['gradients', 'log_px', 'log_pxy', 'log_pygx'])
-    def get_gradients(self, x, y, mask, n_samples):
+    @application(inputs=['features', 'targets', 'mask', 'n_samples'], outputs=['gradients', 'log_px', 'log_pxy', 'log_pygx'])
+    def get_gradients(self, features, targets, mask, n_samples):
         bottom_p = self.bottom_p
         bottom_q = self.bottom_q
         n_layers = len(bottom_p)
         top_p = self.top_p
 
-        batch_size = x.shape[0]
+        batch_size = features.shape[0]
 
 
         # replicate everything
-        x = replicate_batch(x, n_samples)
-        y = replicate_batch(y, n_samples)
+        x = replicate_batch(features, n_samples)
+        y = replicate_batch(targets, n_samples)
         m = replicate_batch(mask, n_samples)
         m = m.reshape((n_samples*batch_size, ))
-        #m = np.zeros(100*n_samples, dtype=np.uint8)
-        #m[0:50*n_samples] = 1
+
+        mask = mask.reshape((batch_size, ))
 
         # calculate ingredients for A(x)
         a_samples = layers_sample(bottom_q, x)      # samples upwards from Q
@@ -143,7 +145,7 @@ class SemiBiHM(HelmholtzMachine):
         a_log_omega = (sum(a_log_probs_p) - sum(a_log_probs_q)) / 2.
 
         # calculate ingredients for B(x, y)
-        #b_samples = layers_sample(bottom_q, x)      # samples upwards from Q
+        #b_samples = layers_sample(bottom_q, x)     # samples upwards from Q
         b_samples = list(a_samples)                 # make copy of samples
         b_samples[-1] = y                           # fix top level to training data
         b_log_probs_q = layers_log_prob(bottom_q, [x]+b_samples)    
@@ -152,7 +154,7 @@ class SemiBiHM(HelmholtzMachine):
 
         b_log_omega = (sum(b_log_probs_p) + b_log_probs_q[-1] - sum(b_log_probs_q[:-1])) / 2.
 
-        # mixtrue proposal for A(x)
+        # mixture proposal for A(x)
         aa_log_probs_q = list(a_log_probs_q)
         aa_log_probs_q[-1] = tensor.switch(tensor.eq(a_samples[-1], y).prod(axis=1),
                                             logplusexp(a_log_probs_q[-1], np.log(1)),
@@ -187,7 +189,7 @@ class SemiBiHM(HelmholtzMachine):
 
         # Choose how to combine the gradients
         #a_norm_omega = tensor.switch(m, -a_norm_omega, 2*a_norm_omega)
-        a_norm_omega = tensor.switch(m,                -aa_norm_omega, 2*a_norm_omega)
+        a_norm_omega = tensor.switch(m,                -aa_norm_omega, 2*a_norm_omega*self.px_weight)
         b_norm_omega = tensor.switch(m, -ab_norm_omega + b_norm_omega, 0)
 
         # calculate gradients
@@ -206,9 +208,12 @@ class SemiBiHM(HelmholtzMachine):
         log_b -= tensor.log(n_samples)
 
         log_px   = 2*log_a
-        log_pxy  = log_a + log_b
-        log_pygx = log_b - log_a
-        #log_pygx = tensor.switch(mask, log_b - log_a, 0)
+        log_pxy  = tensor.switch(mask, log_a + log_b, 0)
+        log_pygx = tensor.switch(mask, log_b - log_a, 0)
+        #log_pxy  = log_a + log_b
+        #log_pygx = log_b - log_a
+    
+        #import ipdb; ipdb.set_trace()
 
         return gradients, log_px, log_pxy, log_pygx
 

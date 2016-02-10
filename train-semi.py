@@ -48,6 +48,7 @@ from blocks.utils import shared_floatx
 from blocks_extras.extensions.plot import PlotManager, Plotter, DisplayImage
 from blocks_extras.extensions.display import ImageDataStreamDisplay, WeightDisplay, ImageSamplesDisplay
 
+#import helmholtz.datasets as datasets
 import helmholtz.semi_datasets as semi_datasets
 
 from helmholtz import create_layers
@@ -134,7 +135,11 @@ def main(args):
         while len(model.parents) > 0:
             model = model.parents[0]
 
-        assert isinstance(model, (BiHM, ReweightedWakeSleep, DVAE, VAE))
+        assert isinstance(model, (SemiBiHM, ))
+
+        model.px_weight = args.px_weight
+            
+
 
         mname, _, _ = basename(args.model_file).rpartition("_model.pkl")
         name = "%s-cont-%s-lr%s-spl%s" % (mname, args.name, lr_tag, args.n_samples)
@@ -144,13 +149,13 @@ def main(args):
     #------------------------------------------------------------
 
     mask = tensor.imatrix('mask')
+    #mask = tensor.zeros((args.batch_size,1)).astype('int32')# tensor.col('mask', dtype='int32')
 
     x = tensor.matrix('features')
     x = x.reshape((args.batch_size,x_dim ))
     y = tensor.matrix('targets')
     y = y.reshape((args.batch_size,y_dim ))
 
-    #mask = np.ones((args.batch_size,1)).astype('int32')# tensor.col('mask', dtype='int32')
 
     #------------------------------------------------------------
     # Testset monitoring
@@ -179,18 +184,16 @@ def main(args):
     #------------------------------------------------------------
     # Gradient and training monitoring
 
-    if args.method == 'semi-bihm':
-        gradients, log_px, log_pxy, log_pygx = model.get_gradients(x, y, mask, args.n_samples)
+ 
+    gradients, log_px, log_pxy, log_pygx = model.get_gradients(x, y, mask, args.n_samples)
 
-        log_px   = named(-log_px.mean(), "log_px")
-        log_pxy  = named(-log_pxy.sum() / mask.sum(), "log_pxy")
-        log_pygx = named(-log_pygx.sum() / mask.sum(), "log_pygx")
-        cost = log_pygx
+    log_px   = named(-log_px.mean(), "log_px")
+    log_pxy  = named(-log_pxy.sum() / mask.sum(), "log_pxy")
+    log_pygx = named(-log_pygx.sum() / mask.sum(), "log_pygx")
+    cost = log_pygx
 
-        train_monitors = [log_px, log_pxy, log_pygx]
-        valid_monitors = [log_px, log_pxy, log_pygx]
-    else:
-        raise ValueError("Unknown method")
+    train_monitors = [log_px, log_pxy, log_pygx]
+    valid_monitors = [log_px, log_pxy, log_pygx]
 
 
     cg = ComputationGraph([cost])
@@ -317,6 +320,8 @@ if __name__ == "__main__":
                 help="Model .pkl lto load and continue")
     subparser.add_argument("--nsamples", "-s", type=int, dest="n_samples",
                 default=10, help="Number of samples")
+    subparser.add_argument("--px-weight", type=float, dest="px_weight",
+                default=1.0, help="Weight for log p*(x)")
 
     # Semisupervised Bidirection HM
     subparser = subparsers.add_parser("semi-bihm",

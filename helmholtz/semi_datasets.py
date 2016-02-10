@@ -90,6 +90,7 @@ def get_streams(data_name, n_labeled, batch_size, small_batch_size=None):
         if small_batch_size is None:
             small_batch_size = batch_size
         batch_size = (batch_size // 2, batch_size // 2)
+        #batch_size = (10, 90)
 
         data_train = MNIST(which_sets=('train',), subset=slice(0, 50000))
         train_labeled, train_unlabeled = mnist_subset(data_train, n_labeled)
