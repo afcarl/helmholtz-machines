@@ -32,11 +32,13 @@ FORMAT = '[%(asctime)s] %(name)-15s %(message)s'
 DATEFMT = "%H:%M:%S"
 logging.basicConfig(format=FORMAT, datefmt=DATEFMT, level=logging.INFO)
 
+
 def scale_norm(arr):
     """ Scale and shoft the given array to be 0..1 """
     arr = arr - arr.min()
     scale = (arr.max() - arr.min())
     return arr / scale
+
 
 def img_grid(arr, global_scale=True):
     N, height, width = arr.shape
@@ -44,14 +46,14 @@ def img_grid(arr, global_scale=True):
     rows = int(np.sqrt(N))
     cols = int(np.sqrt(N))
 
-    if rows*cols < N:
+    if rows * cols < N:
         cols = cols + 1
 
-    if rows*cols < N:
+    if rows * cols < N:
         rows = rows + 1
 
-    total_height = rows * (height+1)
-    total_width  = cols * (width+1)
+    total_height = rows * (height + 1)
+    total_width = cols * (width + 1)
 
     if global_scale:
         arr = scale_norm(arr)
@@ -67,18 +69,18 @@ def img_grid(arr, global_scale=True):
         else:
             this = scale_norm(arr[i])
 
-        offset_y, offset_x = r*(height+1), c*(width+1)
-        I[offset_y:(offset_y+height), offset_x:(offset_x+width)] = this
+        offset_y, offset_x = r * (height + 1), c * (width + 1)
+        I[offset_y:(offset_y + height), offset_x:(offset_x + width)] = this
 
-    I = (255*I).astype(np.uint8)
+    I = (255 * I).astype(np.uint8)
     return Image.fromarray(I)
 
 
 # def sample_rws(brick, args):
 #     assert isinstance(brick, ReweightedWakeSleep)
 #
-#     #----------------------------------------------------------------------
-#     # Compile functions
+# ----------------------------------------------------------------------
+# Compile functions
 #     logger.info("Compiling function...")
 #
 #     n_samples = tensor.iscalar('n_samples')
@@ -86,7 +88,7 @@ def img_grid(arr, global_scale=True):
 #     samples, log_p, log_q = brick.sample(n_samples)
 #
 #     if args.expected:
-#         # Ok, take the second last and sample expected
+# Ok, take the second last and sample expected
 #         x = brick.p_layers[0].sample_expected(samples[1])
 #     else:
 #         x = samples[0]
@@ -98,7 +100,7 @@ def img_grid(arr, global_scale=True):
 #                         x,
 #                         name="do_sample", allow_input_downcast=True)
 #
-#     #----------------------------------------------------------------------
+# ----------------------------------------------------------------------
 #     logger.info("Sample from p(x, h) ...")
 #
 #     x_p = do_sample(args.nsamples)
@@ -124,8 +126,8 @@ def img_grid(arr, global_scale=True):
 # def sample_bihm(brick, args):
 #     assert isinstance(brick, (BiHM, GMM))
 #
-#     #----------------------------------------------------------------------
-#     # Compile functions
+# ----------------------------------------------------------------------
+# Compile functions
 #     logger.info("Compiling function...")
 #
 #     n_inner = tensor.iscalar('n_inner')
@@ -135,7 +137,7 @@ def img_grid(arr, global_scale=True):
 #     samples, log_w = brick.sample(n_samples, oversample=oversample, n_inner=n_inner)
 #
 #     if args.expected:
-#         # Ok, take the second last and sample expected
+# Ok, take the second last and sample expected
 #         x = brick.p_layers[0].sample_expected(samples[1])
 #     else:
 #         x = samples[0]
@@ -147,14 +149,14 @@ def img_grid(arr, global_scale=True):
 #                         [x, log_w],
 #                         name="do_sample", allow_input_downcast=True)
 #
-#     #----------------------------------------------------------------------
+# ----------------------------------------------------------------------
 #
 #     n_samples = tensor.iscalar('n_samples')
 #
 #     samples, _, _ = brick.sample_p(n_samples)
 #
 #     if args.expected:
-#         # Ok, take the second last and sample expected
+# Ok, take the second last and sample expected
 #         x_p = brick.p_layers[0].sample_expected(samples[1])
 #     else:
 #         x_p = samples[0]
@@ -166,7 +168,7 @@ def img_grid(arr, global_scale=True):
 #                         [x_p, samples[1]],
 #                         name="do_sample_p", allow_input_downcast=True)
 #
-#     #----------------------------------------------------------------------
+# ----------------------------------------------------------------------
 #     logger.info("Sample from model...")
 #
 #     n_layers = len(brick.p_layers)
@@ -187,7 +189,7 @@ def img_grid(arr, global_scale=True):
 #     logger.info("Saving %s ..." % fname)
 #     img.save(fname)
 #
-#     #----------------------------------------------------------------------
+# ----------------------------------------------------------------------
 #     logger.info("Sample from p(x, h) ...")
 #
 #     x_p, h1 = do_sample_p(n_samples)
@@ -225,7 +227,6 @@ def sample_nade(brick, args):
     # Compile functions
     logger.info("Compiling function...")
 
-
     # Extract parameters
     b = brick.p_layers[0].mlp.linear_transformations[0].b
     W = brick.p_layers[0].mlp.linear_transformations[0].W
@@ -238,7 +239,6 @@ def sample_nade(brick, args):
     # draw samples (and throw away everything besides of top)
     samples, log_p, log_q = brick.sample(n_samples)
 
-
     def step(h, W_row, canvas):
         # h_top is shape n_samples
         # canvas is shape n_sampes x dim_X
@@ -246,32 +246,29 @@ def sample_nade(brick, args):
 
         return canvas
 
-
     h_top = samples[1].T                # dim_h, n_samples
     canvas = tensor.zeros((n_samples, dim_x)) + b  # n_samples, dim_x
 
-
     scan_results, scan_updates = theano.scan(step,
-                                    sequences=[h_top, W],
-                                    outputs_info=[canvas]
-                                )
+                                             sequences=[h_top, W],
+                                             outputs_info=[canvas]
+                                             )
 
     assert len(scan_updates) == 0
 
     canvas = scan_results
 
-
-    canvas = canvas.reshape([dim_h, n_samples]+img_shape)
+    canvas = canvas.reshape([dim_h, n_samples] + img_shape)
     canvas = tensor.nnet.sigmoid(canvas)
 
     # if args.expected:
-    #     # Ok, take the second last and sample expected
+    # Ok, take the second last and sample expected
     #     x = brick.p_layers[0].sample_expected(samples[1])
     # else:
     #     x = samples[0]
 
     do_sample = theano.function(
-                        [n_samples],
+        [n_samples],
                         canvas,
                         name="do_sample", allow_input_downcast=True)
 
@@ -289,8 +286,6 @@ def sample_nade(brick, args):
         logger.info("Saving %s ..." % fname)
         img.save(fname)
 
-    import ipdb; ipdb.set_trace()
-    
     if args.show:
         import pylab
 
@@ -302,24 +297,21 @@ def sample_nade(brick, args):
         pylab.show(block=True)
 
 
-
-
-
 #-----------------------------------------------------------------------------
 
 if __name__ == "__main__":
     parser = ArgumentParser()
     parser.add_argument("--show", action="store_true")
     parser.add_argument("--expected", "-e", action="store_true",
-            help="Display expected output from last layer")
+                        help="Display expected output from last layer")
     parser.add_argument("--nsamples", "--samples", "-s", type=int,
-            default=100, help="no. of samples to draw")
+                        default=100, help="no. of samples to draw")
     parser.add_argument("--oversample", "--oversamples", type=int,
-            default=1000)
+                        default=1000)
     parser.add_argument("--ninner", type=int,
-            default=100, help="no. of q(x) samples to draw")
+                        default=100, help="no. of q(x) samples to draw")
     parser.add_argument("--shape", type=str, default=None,
-            help="shape of output samples")
+                        help="shape of output samples")
     parser.add_argument("experiment", help="Experiment to load")
     args = parser.parse_args()
 
@@ -340,7 +332,6 @@ if __name__ == "__main__":
         p0 = brick.p_layers[0]
         sqrt = int(np.sqrt(p0.dim_X))
         img_shape = [sqrt, sqrt]
-
 
     if isinstance(brick, ReweightedWakeSleep):
         sample_nade(brick, args)
