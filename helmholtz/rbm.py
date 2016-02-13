@@ -60,7 +60,7 @@ class RBMTopLayer(Initializable, ProbabilisticTopLayer):
     def sample_expected(self, n_samples):
         """
         """
-        iterations = 5
+        iterations = 100
 
         pv = 0.5 * tensor.ones((n_samples, self.dim_x))
 
@@ -148,3 +148,70 @@ class RBMTopLayer(Initializable, ProbabilisticTopLayer):
             grads[k]  = grads_pos[k] - grads_neg[k]
 
         return grads
+
+
+    def estimate_log_z(self, n_samples, beta=10000):
+        """ Run scan-based annealed importance sampling.
+
+        Returns
+        -------
+        w :  tensor.fvector  (shape: n_sample)
+            return the aggretate p(v_k) / p(v_{k-1}) for n_samples
+        """
+        # if isinstance(beta, int):
+        #     beta = numpy.linspace(0, 1, beta)
+
+        iterations = beta.shape[0]
+
+        rand_v = theano_rng.uniform(size=(iterations, n_samples, self.dim_x), nstreams=N_STREAMS)
+        rand_h = theano_rng.uniform(size=(iterations, n_samples, self.dim_h), nstreams=N_STREAMS)
+
+        # Initial v from factorial bernoulli
+        pv = 0.5 * tensor.ones((n_samples, self.dim_x))
+        v = tensor.cast(rand_v[0] <= pv, floatX)
+
+        # Initial \omega is just - log p_0(v)
+        w = -self.dim_x * tensor.log(0.5) * tensor.ones( (n_samples,) )
+
+        def step(beta, rand_v, rand_h, v_prev, w, W, b, c):
+            # calculate log probs for old sample, current annealing distribution
+            ph_prev = sigmoid(tensor.dot(v_prev, W) + b)
+            log_prob_prev = -beta * (tensor.sum(tensor.dot(v_prev, W) * ph_prev, axis=1) \
+                                - tensor.sum(v_prev  * b, axis=1) \
+                                - tensor.sum(ph_prev * c, axis=1))
+
+            # get next sample ...
+            ph = sigmoid( (tensor.dot(v_prev, W) + b))
+            h  = tensor.cast(rand_h <= ph, floatX)
+            pv_next = sigmoid(beta * (tensor.dot(h, W.T) + c))
+            v_next = tensor.cast(rand_v <= pv_next, floatX)
+
+            # ... and log prob for next sample, current annealing distribution
+            ph_next = sigmoid(tensor.dot(v_next, W) + b)
+            log_prob_next = -beta * (tensor.sum(tensor.dot(v_next, W) * ph_next, axis=1) \
+                                - tensor.sum(v_next  * b, axis=1) \
+                                - tensor.sum(ph_next * c, axis=1))
+
+            w += log_prob_prev - log_prob_next
+
+            return v_next, w
+
+        import ipdb; ipdb.set_trace()
+
+        scan_results, scan_updates = theano.scan(
+                fn=step,
+                sequences=[beta, rand_v, rand_h],
+                outputs_info=[v, w],
+                non_sequences=[self.W, self.b, self.c]
+            )
+
+        assert len(scan_updates) == 0
+
+        import ipdb; ipdb.set_trace()
+
+        v, w = scan_results
+
+        # Add p_K(v) to last iterations \omega obtain final w
+        w = w[-1] + self.log_prob(v[-1])
+
+        return w

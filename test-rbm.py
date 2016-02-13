@@ -9,13 +9,11 @@ import numpy as np
 import theano
 import theano.tensor as tensor
 
-import helmholtz.rbm
+from helmholtz.rbm import RBMTopLayer
 
 #===================================================================================
 
 if __name__ == "__main__":
-    __package__ = "helmholtz.rbm"
-
     import numpy as np
     import theano
 
@@ -29,7 +27,7 @@ if __name__ == "__main__":
     lr = tensor.fscalar('learning_rate')
     v = tensor.fmatrix('v')
 
-    rbm = helmholtz.rbm.RBMTopLayer(5, 5, **inits)
+    rbm = RBMTopLayer(5, 5, **inits)
     rbm.initialize()
 
 
@@ -53,7 +51,20 @@ if __name__ == "__main__":
 
     #--------------------------------------------------------------------------
 
-    lr = 1e-1
+    iterations = 10000
+    beta = tensor.arange(iterations) / iterations
+
+    n_samples = tensor.iscalar('n_samples')
+    w = rbm.estimate_log_z(n_samples, beta)
+    do_log_z = theano.function([n_samples], w, allow_input_downcast=True)
+
+    def estimate_log_z():
+        w = do_log_z(100)
+        print("log Z = %f" % w.mean())
+
+    #--------------------------------------------------------------------------
+
+    lr = 3e-2
     v = np.array(
         [[1., 1., 1., 0., 0.],
          [0., 0., 1., 1., 1.]])
@@ -61,10 +72,12 @@ if __name__ == "__main__":
     # batch_size = 100
     # v = np.zeros( (batch_size, 10))
 
-    for i in xrange(5000):
+    for i in xrange(100000):
         log_probs, db, dc, dW = do_rbm(v, lr)
 
-        print(log_probs.sum())
+        if i % 100 == 0:
+            print(log_probs.sum())
+            estimate_log_z()
 
     samples = do_sample(20)
     print(samples)
