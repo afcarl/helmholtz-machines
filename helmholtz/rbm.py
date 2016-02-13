@@ -25,7 +25,6 @@ floatX = theano.config.floatX
 theano_rng = MRG_RandomStreams(seed=2341)
 N_STREAMS = 2048
 
-
 sigmoid_fringe = 1e-6
 
 def sigmoid(val):
@@ -35,7 +34,7 @@ def sigmoid(val):
 
 class RBMTopLayer(Initializable, ProbabilisticTopLayer):
     """ Top level RBM """
-    def __init__(self, dim_x, dim_h=None, **kwargs):
+    def __init__(self, dim_x, dim_h=None, cd_iterations=3, **kwargs):
         super(RBMTopLayer, self).__init__(**kwargs)
 
         if dim_h is None:
@@ -43,6 +42,8 @@ class RBMTopLayer(Initializable, ProbabilisticTopLayer):
 
         self.dim_x = dim_x
         self.dim_h = dim_h
+
+        self.cd_iterations = cd_iterations
 
     def _allocate(self):
         self.W = shared_floatx_zeros((self.dim_x, self.dim_h), name="W") # encoder weights
@@ -57,15 +58,48 @@ class RBMTopLayer(Initializable, ProbabilisticTopLayer):
 
     @application(outputs=['X_expected'])
     def sample_expected(self, n_samples):
-        raise NotImplemented
+        """
+        """
+        iterations = 5
+
+        pv = 0.5 * tensor.ones((n_samples, self.dim_x))
+
+        rand_v = theano_rng.uniform(size=(iterations, n_samples, self.dim_x), nstreams=N_STREAMS)
+        rand_h = theano_rng.uniform(size=(iterations, n_samples, self.dim_h), nstreams=N_STREAMS)
+
+        # negative phase samples CD #k
+        def step(pv, rand_v, rand_h, W, b, c):
+            #v = bernoulli(pv)
+            v = tensor.cast(rand_v <= pv, floatX)
+            ph = sigmoid(tensor.dot(v, W) + b)
+            #h = bernoulli(ph)
+            h = tensor.cast(rand_h <= ph, floatX)
+            pv = sigmoid(tensor.dot(h, W.T) + c)
+            return pv
+
+        scan_result, scan_updates = theano.scan(
+                fn=step,
+                outputs_info=[pv],
+                sequences=[rand_v, rand_h],
+                non_sequences=[self.W, self.b, self.c],
+                n_steps=iterations)
+
+        assert len(scan_updates) == 0
+        return scan_result[-1]
 
     @application(outputs=['X', 'log_prob'])
     def sample(self, n_samples):
+        """ Sampls *n_samples* from this model.
 
-        raise NotImplemented
-        #------------------------------------------------------------------
+        Returns
+        -------
+        X        : tensor.fmatrix (shape n_samples x dim_x)
+        log_prob : tensor.fvector (shape n_sampls)
+        """
+        pv = self.sample_expected(n_samples)
+        v = bernoulli(pv)
 
-        return vis.T, post[-1,:]
+        return v, self.log_prob(v)
 
 
     @application(inputs='X', outputs='log_prob')
@@ -94,15 +128,19 @@ class RBMTopLayer(Initializable, ProbabilisticTopLayer):
 
     @application(inputs=['X', 'weights'], outputs='gradients')
     def get_gradients(self, X, weights=1.):
+
+        # gradients for the positive phase
         grads_pos = super(RBMTopLayer, self).get_gradients(X, weights)
 
-        # negative phase
-        for i in xrange(1):
-            ph = sigmoid(tensor.dot(X, self.W) + self.b)
+        # negative phase samples CD #k
+        v = X
+        for i in xrange(self.cd_iterations):
+            ph = sigmoid(tensor.dot(v, self.W) + self.b)
             h = bernoulli(ph)
-            pv = sigmoid(tensor.dot(X, self.W.T) + self.c)
+            pv = sigmoid(tensor.dot(h, self.W.T) + self.c)
             v = bernoulli(pv)
 
+        # negative phase gradients
         grads_neg = super(RBMTopLayer, self).get_gradients(v, )
 
         grads = OrderedDict()
@@ -110,33 +148,3 @@ class RBMTopLayer(Initializable, ProbabilisticTopLayer):
             grads[k]  = grads_pos[k] - grads_neg[k]
 
         return grads
-
-
-
-        # # positive phase
-        # ph = sigmoid(tensor.dot(X, self.W) + self.b)
-        #
-        # dW = -tensor.outer(X, ph)
-        # db = -X.sum(axis=0)
-        # dc = -ph.sum(axis=0)
-        #
-        # # negative phase
-        # for i in xrange(1):
-        #     h = bernoulli(ph)
-        #     pv = sigmoid(tensor.dot(X, self.W.T) + self.c)
-        #     v = bernoulli(pv)
-        #     ph = sigmoid(tensor.dot(X, self.W) + self.b)
-        #
-        # dW += tensor.outer(v, ph)
-        # db += v.sum(axis=0)
-        # dc += ph.sum(axis=0)
-        #
-        # grads = OrderedDict(
-        #     ((self.W, dW),
-        #      (self.b, db),
-        #      (self.c, dc))
-        # )
-        #
-        # import ipdb; ipdb.set_trace()
-        #
-        # return grads
