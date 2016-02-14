@@ -16,6 +16,7 @@ from blocks.bricks import Random, MLP, Initializable
 from blocks.utils import pack, shared_floatx_zeros
 from blocks.select import Selector
 
+from . import logsumexp, logplusexp
 from .distributions import bernoulli
 from .prob_layers import ProbabilisticTopLayer, ProbabilisticLayer
 
@@ -46,9 +47,9 @@ class RBMTopLayer(Initializable, ProbabilisticTopLayer):
         self.cd_iterations = cd_iterations
 
     def _allocate(self):
-        self.W = shared_floatx_zeros((self.dim_x, self.dim_h), name="W") # encoder weights
         self.b = shared_floatx_zeros((self.dim_x,), name="b")            # visible bias
         self.c = shared_floatx_zeros((self.dim_h,), name="c")            # hidden bias
+        self.W = shared_floatx_zeros((self.dim_x, self.dim_h), name="W") # weights
         self.parameters = [self.b, self.c, self.W]
 
     def _initialize(self):
@@ -68,21 +69,19 @@ class RBMTopLayer(Initializable, ProbabilisticTopLayer):
         rand_h = theano_rng.uniform(size=(iterations, n_samples, self.dim_h), nstreams=N_STREAMS)
 
         # negative phase samples CD #k
-        def step(pv, rand_v, rand_h, W, b, c):
+        def step(rand_v, rand_h, pv, W, b, c):
             #v = bernoulli(pv)
             v = tensor.cast(rand_v <= pv, floatX)
-            ph = sigmoid(tensor.dot(v, W) + b)
-            #h = bernoulli(ph)
+            ph = sigmoid(tensor.dot(v, W) + c)
             h = tensor.cast(rand_h <= ph, floatX)
-            pv = sigmoid(tensor.dot(h, W.T) + c)
+            pv = sigmoid(tensor.dot(h, W.T) + b)
             return pv
 
         scan_result, scan_updates = theano.scan(
                 fn=step,
-                outputs_info=[pv],
                 sequences=[rand_v, rand_h],
-                non_sequences=[self.W, self.b, self.c],
-                n_steps=iterations)
+                outputs_info=[pv],
+                non_sequences=[self.W, self.b, self.c] )
 
         assert len(scan_updates) == 0
         return scan_result[-1]
@@ -104,7 +103,7 @@ class RBMTopLayer(Initializable, ProbabilisticTopLayer):
 
     @application(inputs='X', outputs='log_prob')
     def log_prob(self, X):
-        """ Evaluate the log-probability for the given samples.
+        """ Evaluate the log-probability for the given X.
 
         Parameters
         ----------
@@ -114,16 +113,14 @@ class RBMTopLayer(Initializable, ProbabilisticTopLayer):
         Returns
         -------
         log_p:  T.tensor
-            log-probabilities for the samples in X
+            log-probabilities for the given observed X
         """
 
-        ph = sigmoid(tensor.dot(X, self.W) + self.b)
+        log_prob = tensor.sum(
+                logplusexp(tensor.log(1.), tensor.dot(X, self.W) + self.c), axis=1
+            ) + tensor.sum(X * self.b, axis=1)
 
-        E = -tensor.sum(tensor.dot(X, self.W) * ph, axis=1) \
-                - tensor.sum(X  * self.b, axis=1) \
-                - tensor.sum(ph * self.c, axis=1)
-
-        return E
+        return log_prob
 
 
     @application(inputs=['X', 'weights'], outputs='gradients')
@@ -135,13 +132,13 @@ class RBMTopLayer(Initializable, ProbabilisticTopLayer):
         # negative phase samples CD #k
         v = X
         for i in xrange(self.cd_iterations):
-            ph = sigmoid(tensor.dot(v, self.W) + self.b)
+            ph = sigmoid(tensor.dot(v, self.W) + self.c)
             h = bernoulli(ph)
-            pv = sigmoid(tensor.dot(h, self.W.T) + self.c)
+            pv = sigmoid(tensor.dot(h, self.W.T) + self.b)
             v = bernoulli(pv)
 
         # negative phase gradients
-        grads_neg = super(RBMTopLayer, self).get_gradients(v, )
+        grads_neg = super(RBMTopLayer, self).get_gradients(v, 1.)
 
         grads = OrderedDict()
         for k, v in grads_pos.items():
@@ -171,32 +168,26 @@ class RBMTopLayer(Initializable, ProbabilisticTopLayer):
         v = tensor.cast(rand_v[0] <= pv, floatX)
 
         # Initial \omega is just - log p_0(v)
-        w = -self.dim_x * tensor.log(0.5) * tensor.ones( (n_samples,) )
+        # w = -self.dim_x * tensor.log(0.5) * tensor.ones( (n_samples,) )
+        w = tensor.zeros( (n_samples,) )
 
         def step(beta, rand_v, rand_h, v_prev, w, W, b, c):
+
             # calculate log probs for old sample, current annealing distribution
-            ph_prev = sigmoid(tensor.dot(v_prev, W) + b)
-            log_prob_prev = -beta * (tensor.sum(tensor.dot(v_prev, W) * ph_prev, axis=1) \
-                                - tensor.sum(v_prev  * b, axis=1) \
-                                - tensor.sum(ph_prev * c, axis=1))
+            log_prob_prev = beta * self.log_prob(v_prev)
 
             # get next sample ...
-            ph = sigmoid( (tensor.dot(v_prev, W) + b))
+            ph = sigmoid(beta * (tensor.dot(v_prev, W) + c))
             h  = tensor.cast(rand_h <= ph, floatX)
-            pv_next = sigmoid(beta * (tensor.dot(h, W.T) + c))
+            pv_next = sigmoid(beta * (tensor.dot(h, W.T) + b))
             v_next = tensor.cast(rand_v <= pv_next, floatX)
 
             # ... and log prob for next sample, current annealing distribution
-            ph_next = sigmoid(tensor.dot(v_next, W) + b)
-            log_prob_next = -beta * (tensor.sum(tensor.dot(v_next, W) * ph_next, axis=1) \
-                                - tensor.sum(v_next  * b, axis=1) \
-                                - tensor.sum(ph_next * c, axis=1))
+            log_prob_next = beta * self.log_prob(v_next)
 
             w += log_prob_prev - log_prob_next
 
             return v_next, w
-
-        import ipdb; ipdb.set_trace()
 
         scan_results, scan_updates = theano.scan(
                 fn=step,
@@ -207,11 +198,12 @@ class RBMTopLayer(Initializable, ProbabilisticTopLayer):
 
         assert len(scan_updates) == 0
 
-        import ipdb; ipdb.set_trace()
-
         v, w = scan_results
 
         # Add p_K(v) to last iterations \omega obtain final w
         w = w[-1] + self.log_prob(v[-1])
+
+        # multiply by Za
+        w += (self.dim_x) * tensor.log(2)
 
         return w
