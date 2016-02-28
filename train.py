@@ -269,47 +269,6 @@ def main(args):
         train_monitors += [log_p, log_ph]
         valid_monitors += [log_p, log_ph]
 
-    #------------------------------------------------------------
-    # Detailed monitoring
-    """
-    n_layers = len(p_layers)
-
-    log_px, w, log_p, log_q, samples = model.log_likelihood(x, n_samples)
-
-    exp_samples = []
-    for l in xrange(n_layers):
-        e = (w.dimshuffle(0, 1, 'x')*samples[l]).sum(axis=1)
-        e.name = "inference_h%d" % l
-        e.tag.aggregation_scheme = aggregation.TakeLast(e)
-        exp_samples.append(e)
-
-    s1 = samples[1]
-    sh1 = s1.shape
-    s1_ = s1.reshape([sh1[0]*sh1[1], sh1[2]])
-    s0, _ = model.p_layers[0].sample_expected(s1_)
-    s0 = s0.reshape([sh1[0], sh1[1], s0.shape[1]])
-    s0 = (w.dimshuffle(0, 1, 'x')*s0).sum(axis=1)
-    s0.name = "inference_h0^"
-    s0.tag.aggregation_scheme = aggregation.TakeLast(s0)
-    exp_samples.append(s0)
-
-    # Draw P-samples
-    p_samples, _, _ = model.sample_p(100)
-    #weights = model.importance_weights(samples)
-    #weights = weights / weights.sum()
-
-    for i, s in enumerate(p_samples):
-        s.name = "psamples_h%d" % i
-        s.tag.aggregation_scheme = aggregation.TakeLast(s)
-
-    #
-    samples = model.sample(100, oversample=100)
-
-    for i, s in enumerate(samples):
-        s.name = "samples_h%d" % i
-        s.tag.aggregation_scheme = aggregation.TakeLast(s)
-    """
-    cg = ComputationGraph([cost])
 
     #------------------------------------------------------------
 
