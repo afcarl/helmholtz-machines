@@ -213,8 +213,8 @@ class ReweightedWakeSleep(HelmholtzMachine):
         gradients = merge_gradients(gradients, p_layers[-1].get_gradients(samples[-1], weights=wp))
 
         # Now sleep phase..
-        samples, log_p, log_q = self.sample_p(batch_size)
-        for l in xrange(n_layers - 1):
-            gradients = merge_gradients(gradients, q_layers[l].get_gradients(samples[l + 1], samples[l]), 0.5)
+        #samples, log_p, log_q = self.sample_p(batch_size)
+        #for l in xrange(n_layers - 1):
+        #    gradients = merge_gradients(gradients, q_layers[l].get_gradients(samples[l + 1], samples[l]), 0.5)
 
         return log_px, log_px, gradients
