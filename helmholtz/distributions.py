@@ -34,22 +34,22 @@ class BernoulliOp(theano.Op):
     def __init__(self):
         super(BernoulliOp, self).__init__()
 
-    def make_node(self, prob, rng=None, nstreams=None):
+    def make_node(self, prob, rng=None, noise=None, nstreams=None):
         assert hasattr(self, '_props')
 
         if rng is None:
             rng = theano_rng
         if nstreams is None:
             nstreams = N_STREAMS
-
+        if noise is None:
+            noise = rng.uniform(size=prob.shape, nstreams=nstreams)
         prob = theano.tensor.as_tensor_variable(prob)
-        noise = rng.uniform(size=prob.shape, nstreams=nstreams)
 
         return theano.Apply(self, [prob, noise], [prob.type()])
 
     def perform(self, node, inputs, output_storage):
         logger.warning("BernoulliOp.perform(...) called")
-        
+
         prob = inputs[0]
         noise = inputs[1]
 
