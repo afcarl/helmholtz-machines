@@ -35,7 +35,7 @@ def sigmoid(val):
 
 class RBMTopLayer(Initializable, ProbabilisticTopLayer):
     """ Top level RBM """
-    def __init__(self, dim_x, dim_h=None, cd_iterations=3, **kwargs):
+    def __init__(self, dim_x, dim_h=None, cd_iterations=3, pcd=None, **kwargs):
         super(RBMTopLayer, self).__init__(**kwargs)
 
         if dim_h is None:
@@ -45,6 +45,7 @@ class RBMTopLayer(Initializable, ProbabilisticTopLayer):
         self.dim_h = dim_h
 
         self.cd_iterations = cd_iterations
+        self.pcd = pcd
 
     def _allocate(self):
         self.b = shared_floatx_zeros((self.dim_x,), name="b")            # visible bias
@@ -52,58 +53,160 @@ class RBMTopLayer(Initializable, ProbabilisticTopLayer):
         self.W = shared_floatx_zeros((self.dim_x, self.dim_h), name="W") # weights
         self.parameters = [self.b, self.c, self.W]
 
+        if self.pcd:
+            self.pcd = shared_floatx_zeros((self.pcd, self.dim_x), name='pcd_samples')
+
     def _initialize(self):
         self.biases_init.initialize(self.b, self.rng)
         self.biases_init.initialize(self.c, self.rng)
         self.weights_init.initialize(self.W, self.rng)
 
-    @application(outputs=['X_expected'])
-    def sample_expected(self, n_samples):
+    @application(inputs=['h', 'beta'], outputs=['pv'])
+    def prob_v_given_h(self, h, beta=1.):
+        """ Return p(v | h) -- with optional ennealing parameter beta """
+        return sigmoid(beta * (tensor.dot(h, self.W.T) + self.b))
+
+    @application(inputs=['v', 'beta'], outputs=['ph'])
+    def prob_h_given_v(self, v, beta=1.):
+        """ Return p(h | v) -- with optional annealing parameter beta """
+        return sigmoid(beta * (tensor.dot(v, self.W) + self.c))
+
+    @application(inputs=['v', 'h'], outputs='E')
+    def energy(self, v, h):
+        """ Rrturn the energy E = -vWh -vb - hc
+
+        Parameters
+        ----------
+        v : tensor.fmatrix
+        h : tensor.fmatriv
+
+        Returns
+        -------
+        E : tensor.fvector
         """
+        return -tensor.sum(h * tensor(v, self.W), axis=1) \
+                -tensor.sum(v * self.b, axis=1) \
+                -tensor.sum(h * self.c, axis=1)
+
+    @application(inputs=['n_samples', 'mcmc_steps'], outputs=['X_expected'])
+    def sample_expected(self, n_samples, mcmc_steps=10000):
+        """ Run an MCMC chain to sample from the RBM.
+
+        Returns
+        -------
+
+        v : tensor.fmatix (n_samples x dim_x)
         """
-        iterations = 100
+
+        # annealed sampling
+        def step(beta, rand_v, rand_h, pv, W, b, c):
+            v = bernoulli(pv, noise=rand_v)
+            ph = self.prob_h_given_v(v, beta)
+            h = bernoulli(ph, noise=rand_h)
+            pv = self.prob_v_given_h(h, beta)
+            return pv
 
         pv = 0.5 * tensor.ones((n_samples, self.dim_x))
+        beta = 0.9 * tensor.arange(mcmc_steps) / mcmc_steps
 
-        rand_v = theano_rng.uniform(size=(iterations, n_samples, self.dim_x), nstreams=N_STREAMS)
-        rand_h = theano_rng.uniform(size=(iterations, n_samples, self.dim_h), nstreams=N_STREAMS)
-
-        # negative phase samples CD #k
-        def step(rand_v, rand_h, pv, W, b, c):
-            #v = bernoulli(pv)
-            v = tensor.cast(rand_v <= pv, floatX)
-            ph = sigmoid(tensor.dot(v, W) + c)
-            h = tensor.cast(rand_h <= ph, floatX)
-            pv = sigmoid(tensor.dot(h, W.T) + b)
-            return pv
+        beta = tensor.cast(beta, 'float32')
+        rand_v = theano_rng.uniform(size=(mcmc_steps, n_samples, self.dim_x), nstreams=N_STREAMS)
+        rand_h = theano_rng.uniform(size=(mcmc_steps, n_samples, self.dim_h), nstreams=N_STREAMS)
 
         scan_result, scan_updates = theano.scan(
                 fn=step,
-                sequences=[rand_v, rand_h],
+                sequences=[beta, rand_v, rand_h],
                 outputs_info=[pv],
                 non_sequences=[self.W, self.b, self.c] )
-
         assert len(scan_updates) == 0
-        return scan_result[-1]
+        pv = scan_result[-1]
+
+        beta = 0.9 + 0.1 * tensor.arange(mcmc_steps) / mcmc_steps
+
+        beta = tensor.cast(beta, 'float32')
+        rand_v = theano_rng.uniform(size=(mcmc_steps, n_samples, self.dim_x), nstreams=N_STREAMS)
+        rand_h = theano_rng.uniform(size=(mcmc_steps, n_samples, self.dim_h), nstreams=N_STREAMS)
+
+        scan_result, scan_updates = theano.scan(
+                fn=step,
+                sequences=[beta, rand_v, rand_h],
+                outputs_info=[pv],
+                non_sequences=[self.W, self.b, self.c] )
+        assert len(scan_updates) == 0
+        pv = scan_result[-1]
+
+        beta = tensor.ones((mcmc_steps,))
+
+        rand_v = theano_rng.uniform(size=(mcmc_steps, n_samples, self.dim_x), nstreams=N_STREAMS)
+        rand_h = theano_rng.uniform(size=(mcmc_steps, n_samples, self.dim_h), nstreams=N_STREAMS)
+
+        scan_result, scan_updates = theano.scan(
+                fn=step,
+                sequences=[beta, rand_v, rand_h],
+                outputs_info=[pv],
+                non_sequences=[self.W, self.b, self.c] )
+        assert len(scan_updates) == 0
+        pv = scan_result[-1]
+
+        return pv
 
     @application(outputs=['X', 'log_prob'])
-    def sample(self, n_samples):
+    def sample(self, n_samples, mcmc_steps=10000):
         """ Sampls *n_samples* from this model.
 
         Returns
         -------
-        X        : tensor.fmatrix (shape n_samples x dim_x)
-        log_prob : tensor.fvector (shape n_sampls)
+        v  : tensor.fmatrix (n_samples x dim_x)
         """
-        pv = self.sample_expected(n_samples)
+        pv = self.sample_expected(n_samples, mcmc_steps)
+
+        # Sample accoring to pv
         v = bernoulli(pv)
 
-        return v, self.log_prob(v)
+        return v
+
+    @application(inputs=['h', 'beta'], outputs='unnorm_log_prob')
+    def unnorm_log_prob_given_h(self, h, beta=1.):
+        """ Return the energy E for the given h.
+
+        Parameters
+        ----------
+        h:      T.tensor
+
+        Returns
+        -------
+        log_p:  T.tensor
+            log-probabilities for the given observed h
+        """
+        log_prob = tensor.sum(
+                logplusexp(tensor.log(1.), beta*(tensor.dot(h, self.W.T) + self.b)), axis=1
+            ) + beta * tensor.sum(h * self.c, axis=1)
+
+        return log_prob
+
+    @application(inputs=['v', 'beta'], outputs='unnorm_log_prob')
+    def unnorm_log_prob(self, v, beta=1.):
+        """ Return the energy E for the given X.
+
+        Parameters
+        ----------
+        v:      T.tensor
+
+        Returns
+        -------
+        log_p:  T.tensor
+            log-probabilities for the given observed X
+        """
+        log_prob = tensor.sum(
+                logplusexp(tensor.log(1.), beta*(tensor.dot(v, self.W) + self.c)), axis=1
+            ) + beta * tensor.sum(v * self.b, axis=1)
+
+        return log_prob
 
 
     @application(inputs='X', outputs='log_prob')
     def log_prob(self, X):
-        """ Evaluate the log-probability for the given X.
+        """ Evaluate the *UNNORMALIZED* log-probability for the given X.
 
         Parameters
         ----------
@@ -116,94 +219,55 @@ class RBMTopLayer(Initializable, ProbabilisticTopLayer):
             log-probabilities for the given observed X
         """
 
-        log_prob = tensor.sum(
-                logplusexp(tensor.log(1.), tensor.dot(X, self.W) + self.c), axis=1
-            ) + tensor.sum(X * self.b, axis=1)
+        return self.unnorm_log_prob(X)
 
-        return log_prob
+    @application(inputs=['v', 'weights'], outputs=['gradients', 'recons_xentropy'])
+    def get_gradients(self, v, weights=1.):
+        """ Return gradients and reconstruction cross entropy to monitor progress.
+        """
+        def grads(v):
+            cost = -self.unnorm_log_prob(v).mean()
 
-
-    @application(inputs=['X', 'weights'], outputs='gradients')
-    def get_gradients(self, X, weights=1.):
+            return OrderedDict((
+                (self.b, theano.grad(cost, self.b, consider_constant=[v])),
+                (self.c, theano.grad(cost, self.c, consider_constant=[v])),
+                (self.W, theano.grad(cost, self.W, consider_constant=[v])),
+            ))
 
         # gradients for the positive phase
-        grads_pos = super(RBMTopLayer, self).get_gradients(X, weights)
+        grads_pos = grads(v)
+
+        ph = self.prob_h_given_v(v)
+        h = bernoulli(ph)
+        pv = self.prob_v_given_h(h)
+
+        #unnorm_log_prob = -self.unnorm_log_prob(v).mean()
+        #recons_xentropy = tensor.sum(v * tensor.log(pv) + (1-v) * tensor.log(1-pv), axis=1)
+        #recons_xentropy.name = "recons_xentropy"
+
+        # negative phase from PCD?
+        if self.pcd:
+            v = self.pcd
 
         # negative phase samples CD #k
-        v = X
         for i in xrange(self.cd_iterations):
-            ph = sigmoid(tensor.dot(v, self.W) + self.c)
+            ph = self.prob_h_given_v(v)
             h = bernoulli(ph)
-            pv = sigmoid(tensor.dot(h, self.W.T) + self.b)
+
+            pv = self.prob_v_given_h(h)
             v = bernoulli(pv)
 
-        # negative phase gradients
-        grads_neg = super(RBMTopLayer, self).get_gradients(v, 1.)
+        if self.pcd:
+            self.pcd_updates = [(self.pcd, v)]
+        else:
+            self.pcd_updates = []
 
+        # negative phase gradients
+        grads_neg = grads(v)
+
+        # Merge positive and negative gradients
         grads = OrderedDict()
         for k, v in grads_pos.items():
             grads[k]  = grads_pos[k] - grads_neg[k]
 
         return grads
-
-
-    def estimate_log_z(self, n_samples, beta=10000):
-        """ Run scan-based annealed importance sampling.
-
-        Returns
-        -------
-        w :  tensor.fvector  (shape: n_sample)
-            return the aggretate p(v_k) / p(v_{k-1}) for n_samples
-        """
-        # if isinstance(beta, int):
-        #     beta = numpy.linspace(0, 1, beta)
-
-        iterations = beta.shape[0]
-
-        rand_v = theano_rng.uniform(size=(iterations, n_samples, self.dim_x), nstreams=N_STREAMS)
-        rand_h = theano_rng.uniform(size=(iterations, n_samples, self.dim_h), nstreams=N_STREAMS)
-
-        # Initial v from factorial bernoulli
-        pv = 0.5 * tensor.ones((n_samples, self.dim_x))
-        v = tensor.cast(rand_v[0] <= pv, floatX)
-
-        # Initial \omega is just - log p_0(v)
-        # w = -self.dim_x * tensor.log(0.5) * tensor.ones( (n_samples,) )
-        w = tensor.zeros( (n_samples,) )
-
-        def step(beta, rand_v, rand_h, v_prev, w, W, b, c):
-
-            # calculate log probs for old sample, current annealing distribution
-            log_prob_prev = beta * self.log_prob(v_prev)
-
-            # get next sample ...
-            ph = sigmoid(beta * (tensor.dot(v_prev, W) + c))
-            h  = tensor.cast(rand_h <= ph, floatX)
-            pv_next = sigmoid(beta * (tensor.dot(h, W.T) + b))
-            v_next = tensor.cast(rand_v <= pv_next, floatX)
-
-            # ... and log prob for next sample, current annealing distribution
-            log_prob_next = beta * self.log_prob(v_next)
-
-            w += log_prob_prev - log_prob_next
-
-            return v_next, w
-
-        scan_results, scan_updates = theano.scan(
-                fn=step,
-                sequences=[beta, rand_v, rand_h],
-                outputs_info=[v, w],
-                non_sequences=[self.W, self.b, self.c]
-            )
-
-        assert len(scan_updates) == 0
-
-        v, w = scan_results
-
-        # Add p_K(v) to last iterations \omega obtain final w
-        w = w[-1] + self.log_prob(v[-1])
-
-        # multiply by Za
-        w += (self.dim_x) * tensor.log(2)
-
-        return w

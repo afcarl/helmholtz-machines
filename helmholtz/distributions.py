@@ -1,4 +1,4 @@
-#!/usr/bin/env python 
+#!/usr/bin/env python
 
 from __future__ import division, print_function
 
@@ -83,16 +83,16 @@ def replace_bernoulli_op(node):
     prob = node.inputs[0]
     noise = node.inputs[1]
 
-    
-    
+
+
     samples = (noise < prob).astype(floatX)
-    
+
     return [samples]
 
 #=============================================================================
 
 if __name__ == "__main__":
-    
+
     n_samples = tensor.iscalar("n_samples")
     prob = tensor.vector('prob')
     target_prob = tensor.vector('target_prob')
@@ -101,10 +101,10 @@ if __name__ == "__main__":
     bprob = tensor.ones(shape) * prob
 
     samples = bernoulli(bprob, rng=theano_rng)
-    
+
     mean = tensor.mean(samples, axis=0)
     cost = tensor.sum((mean-target_prob)**2)
-    
+
     grads = theano.grad(cost, prob)
 
     print("-"*78)
@@ -112,11 +112,11 @@ if __name__ == "__main__":
     print("-"*78)
 
     do_sample = theano.function(
-                inputs=[prob, target_prob, n_samples], 
+                inputs=[prob, target_prob, n_samples],
                 outputs=[samples, grads],
                 allow_input_downcast=True, name="do_sample")
 
-    
+
     #-------------------------------------------------------------------------
     n_samples = 10000
     prob = np.linspace(0, 1, 10)

@@ -39,6 +39,7 @@ from blocks.extensions.training import SharedVariableModifier, TrackTheBest
 from blocks.extensions.monitoring import DataStreamMonitoring, TrainingDataMonitoring
 from blocks.filter import VariableFilter
 from blocks.graph import ComputationGraph
+from blocks.initialization import Uniform, IsotropicGaussian, Constant
 from blocks.model import Model
 from blocks.monitoring import aggregation
 from blocks.main_loop import MainLoop
@@ -55,6 +56,10 @@ from helmholtz.bihm import BiHM
 from helmholtz.dvae import DVAE
 from helmholtz.rws import ReweightedWakeSleep
 from helmholtz.vae import VAE
+
+from helmholtz.nade import NADETopLayer
+from helmholtz.rbm import RBMTopLayer
+
 
 floatX = theano.config.floatX
 fuel.config.floatX = floatX
@@ -110,7 +115,7 @@ def main(args):
             hidden_act = Logistic()
         elif args.activation == "relu":
             hidden_act = Rectifier()
-        else: 
+        else:
             raise "Unknown hidden nonlinearity %s" % args.hidden_act
 
         model = VAE(x_dim=x_dim, hidden_layers=layer_sizes, hidden_act=hidden_act, z_dim=z_dim,
@@ -130,7 +135,7 @@ def main(args):
             hidden_act = Logistic()
         elif args.activation == "relu":
             hidden_act = Rectifier()
-        else: 
+        else:
             raise "Unknown hidden nonlinearity %s" % args.hidden_act
 
         model = DVAE(x_dim=x_dim, hidden_layers=layer_sizes, hidden_act=hidden_act, z_dim=z_dim,
@@ -147,6 +152,23 @@ def main(args):
                                 args.layer_spec, x_dim,
                                 args.deterministic_layers,
                                 deterministic_act, deterministic_size)
+
+        # XXX replace top level with something more interesting XXX
+        top_size = p_layers[-1].dim_X
+
+        # p_layers[-1] = NADETopLayer(
+        #                 top_size,
+        #                 name="p_top_nade",
+        #                 **inits)
+        rbm = RBMTopLayer(
+                        dim_x=top_size,
+                        dim_h=20,
+                        cd_iterations=3,
+                        pcd=100,
+                        name="p_top_rbm",
+                        weights_init=IsotropicGaussian(std=0.01),
+                        biases_init=Constant(0.0))
+        p_layers[-1] = rbm
 
         model = ReweightedWakeSleep(
                 p_layers,
@@ -300,6 +322,7 @@ def main(args):
     else:
         raise "Unknown step_rule %s" % args.step_rule
 
+    cg = ComputationGraph([cost])
     #parameters = cg.parameters[:4] + cg.parameters[5:]
     parameters = cg.parameters
 
@@ -313,6 +336,7 @@ def main(args):
             #RemoveNotFinite(1.0),
         ])
     )
+    algorithm.add_updates(rbm.pcd_updates)
 
     #------------------------------------------------------------
 
@@ -398,14 +422,14 @@ if __name__ == "__main__":
                 default=1e-3, help="Learning rate")
     parser.add_argument("--max-epochs", "--epochs", type=int, dest="max_epochs",
                 default=10000, help="Maximum # of training epochs to run")
-    parser.add_argument("--early-stopping", type=int, dest="patience", 
+    parser.add_argument("--early-stopping", type=int, dest="patience",
                 default=10, help="Number of epochs without improvement (default: 10)")
     subparsers = parser.add_subparsers(title="methods", dest="method")
 
     # Continue
     subparser = subparsers.add_parser("continue",
                 help="Variational Auto Encoder with Gaussian latents and Bernoulli observed")
-    subparser.add_argument("model_file", type=str, 
+    subparser.add_argument("model_file", type=str,
                 help="Model .pkl lto load and continue")
     subparser.add_argument("--nsamples", "-s", type=int, dest="n_samples",
                 default=10, help="Number of samples")
@@ -419,7 +443,7 @@ if __name__ == "__main__":
                 default='relu', help="Activation function (last p(x|z) layer is always Logistic; default: relu)")
     subparser.add_argument("--batch-normalization", "--batchnorm", action="store_true",
                 default=False, help="Use Batch normalization for encoder/decoder MLPs)")
-    subparser.add_argument("layer_spec", type=str, 
+    subparser.add_argument("layer_spec", type=str,
                 default="200,100", help="Comma seperated list of layer sizes (last is z-dim)")
 
     # Descrete Variational Autoencoder
@@ -431,7 +455,7 @@ if __name__ == "__main__":
                 default='relu', help="Activation function (last p(x|z) layer is always Logistic; default: relu)")
     subparser.add_argument("--batch-normalization", "--batchnorm", action="store_true",
                 default=False, help="Use Batch normalization for encoder/decoder MLPs)")
-    subparser.add_argument("layer_spec", type=str, 
+    subparser.add_argument("layer_spec", type=str,
                 default="200,100", help="Comma seperated list of layer sizes (last is z-dim)")
 
     # Reweighted Wake-Sleep
