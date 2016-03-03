@@ -22,6 +22,20 @@ def test_shape():
         assert val.shape[0] == 100
         print("%s: %s" % (key, val.shape))
 
+
+def test_mask():
+    dataset = MNIST(which_sets=('train',))
+    labeled, unlabeled = mnist_subset(dataset, 1000)
+    stream = SemisupervisedDataStream(datasets=(labeled, unlabeled), batch_size=(90, 10))
+
+    batch = next(stream.get_epoch_iterator(as_dict=True))
+    assert batch['mask'].sum() == 90
+
+    for batch in stream.get_epoch_iterator(as_dict=True):
+        if batch['mask'].sum() != 90:
+            import ipdb; ipdb.set_trace()
+        
+
 def test_count():
     dataset = MNIST(which_sets=('train',))
     labeled, unlabeled = mnist_subset(dataset, 1000)

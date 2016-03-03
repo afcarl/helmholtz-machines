@@ -79,18 +79,15 @@ def get_streams(data_name, n_labeled, batch_size, small_batch_size=None):
     -------
     x_dim, y_sim, stream_train, stream_valid, stream_test
     """
-    # Our usual train/valid/test data streams...
-    if small_batch_size is None:
-        small_batch_size = batch_size
-        #small_batch_size = max(1, batch_size // 10)
+    bs_labeled, bs_unlabeled = batch_size 
+    assert isinstance(bs_labeled, int)
+    assert isinstance(bs_unlabeled, int)
 
     if data_name == "mnist":
         from fuel.datasets.mnist import MNIST
 
         if small_batch_size is None:
-            small_batch_size = batch_size
-        batch_size = (batch_size // 2, batch_size // 2)
-        #batch_size = (10, 90)
+            small_batch_size = min(bs_labeled, bs_unlabeled)
 
         data_train = MNIST(which_sets=('train',), subset=slice(0, 50000))
         train_labeled, train_unlabeled = mnist_subset(data_train, n_labeled)

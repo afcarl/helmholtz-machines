@@ -89,7 +89,12 @@ def main(args):
     """Run experiment. """
     lr_tag = float_tag(args.learning_rate)
 
-    x_dim, y_dim, train_stream, valid_stream, test_stream = semi_datasets.get_streams(args.data, 1000, args.batch_size)
+    # Batch size
+    bs_labeled, bs_unlabeled = [int(i) for i in args.batch_size.split(",")]
+
+    import ipdb; ipdb.set_trace()
+
+    x_dim, y_dim, train_stream, valid_stream, test_stream = semi_datasets.get_streams(args.data, 1000, (bs_labeled, bs_unlabeled))
 
     #------------------------------------------------------------
     # Setup model
@@ -98,8 +103,8 @@ def main(args):
 
     if args.method == 'semi-bihm':
         sizes_tag = args.layer_spec.replace(",", "-")
-        name = "%s-%s-%s-lr%s-dl%d-spl%d-%s" % \
-            (args.data, args.method, args.name, lr_tag, args.deterministic_layers, args.n_samples, sizes_tag)
+        name = "%s-%s-%s-bs%d%d-lr%s-dl%d-spl%d-%s" % \
+            (args.data, args.method, args.name, bs_labeled, bs_unlabeled, lr_tag, args.deterministic_layers, args.n_samples, sizes_tag)
 
         # create SBN layers
         bottom_p, bottom_q = create_layers(
@@ -152,9 +157,9 @@ def main(args):
     #mask = tensor.zeros((args.batch_size,1)).astype('int32')# tensor.col('mask', dtype='int32')
 
     x = tensor.matrix('features')
-    x = x.reshape((args.batch_size,x_dim ))
+    #x = x.reshape((args.batch_size,x_dim ))
     y = tensor.matrix('targets')
-    y = y.reshape((args.batch_size,y_dim ))
+    #y = y.reshape((args.batch_size,y_dim ))
 
 
     #------------------------------------------------------------
@@ -301,8 +306,8 @@ if __name__ == "__main__":
                 default='mnist', help="Dataset to use")
     parser.add_argument("--live-plotting", "--plot", action="store_true", default=False,
                 help="Enable live plotting to a Bokkeh server")
-    parser.add_argument("--bs", "--batch-size", type=int, dest="batch_size",
-                default=100, help="Size of each mini-batch (default: 100)")
+    parser.add_argument("--bs", "--batch-size", type=str, dest="batch_size",
+                default="50,50", help="Comma seperated batch size for labeled and unlabeled data (default: 50,50)")
     parser.add_argument("--step-rule", choices=['momentum', 'adam', 'rmsprop'], dest="step_rule",
                 default="adam", help="Chose SGD alrogithm (default: adam)"),
     parser.add_argument("--lr", "--learning-rate", type=float, dest="learning_rate",
