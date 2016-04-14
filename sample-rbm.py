@@ -117,7 +117,7 @@ if __name__ == "__main__":
 
         h_top = tensor.fmatrix("samples")
 
-        
+
         p_layers = rws.p_layers
         q_layers = rws.q_layers
         n_layers = len(p_layers)
@@ -155,10 +155,15 @@ if __name__ == "__main__":
     batch_size = tensor.iscalar('batch_size')
     mcmc_steps = tensor.iscalar('mcmc_steps')
 
+
+    samples = rbm.sample(batch_size, mcmc_steps=mcmc_steps)
+    for p in reversed(rws.p_layers[1:-1]):
+        samples, _ = p.sample(samples)
+
     if args.expected:
-        samples = rbm.sample_expected(batch_size, mcmc_steps=mcmc_steps)
+        samples = rws.p_layers[0].sample_expected(samples)
     else:
-        samples = rbm.sample(batch_size, mcmc_steps=mcmc_steps)
+        samples, _ = rws.p_layers[0].sample(samples)
 
     do_samples = theano.function([batch_size, mcmc_steps], samples)
 

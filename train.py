@@ -163,8 +163,8 @@ def main(args):
         rbm = RBMTopLayer(
                         dim_x=top_size,
                         dim_h=20,
-                        cd_iterations=3,
-                        pcd=100,
+                        cd_iterations=10,
+                        pcd=None,
                         name="p_top_rbm",
                         weights_init=IsotropicGaussian(std=0.01),
                         biases_init=Constant(0.0))

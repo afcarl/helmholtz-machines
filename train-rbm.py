@@ -26,7 +26,7 @@ from collections import OrderedDict
 from theano import tensor
 from theano import tensor as T
 
-from blocks.algorithms import GradientDescent, CompositeRule, StepClipping, RemoveNotFinite, Momentum, RMSProp, Adam
+from blocks.algorithms import GradientDescent, CompositeRule, StepClipping, RemoveNotFinite, Momentum, RMSProp, Adam, Restrict
 from blocks.bricks import Tanh, Logistic, Rectifier
 from blocks.extensions import FinishAfter, Timing, Printing, ProgressBar
 from blocks.extensions.stopping import FinishIfNoImprovementAfter
@@ -40,6 +40,7 @@ from blocks.model import Model
 from blocks.monitoring import aggregation
 from blocks.main_loop import MainLoop
 from blocks.roles import add_role, WEIGHT, BIAS, PARAMETER
+from blocks.select import Selector
 from blocks.utils import shared_floatx
 
 from blocks_extras.extensions.plot import PlotManager, Plotter, DisplayImage
@@ -83,7 +84,11 @@ def named(var, name):
 #-----------------------------------------------------------------------------
 def main(args):
     """Run experiment. """
-    lr_tag = float_tag(args.learning_rate)
+    if args.learning_rate_rbm is None:
+        args.learning_rate_rbm = args.learning_rate
+
+    lr_tag  = float_tag(args.learning_rate)
+    lrr_tag = float_tag(args.learning_rate_rbm)
 
     x_dim, train_stream, valid_stream, test_stream = datasets.get_streams(args.data, args.batch_size)
 
@@ -96,8 +101,8 @@ def main(args):
         sizes_tag = args.layer_spec.replace(",", "-")
         qbase = "" if not args.no_qbaseline else "noqb-"
 
-        name = "%s-%s-rbm-%s-%slr%s-dl%d-spl%d-%s" % \
-            (args.data, args.method, args.name, qbase, lr_tag, args.deterministic_layers, args.n_samples, sizes_tag)
+        name = "%s-%s-rbm-%s-cd%d--h%d-%slr%s-lrr%s-dl%d-spl%d-%s" % \
+            (args.data, args.method, args.name, args.cd_iterations, args.rbm_hiddens, qbase, lr_tag, lrr_tag, args.deterministic_layers, args.n_samples, sizes_tag)
 
         p_layers, q_layers = create_layers(
                                 args.layer_spec, x_dim,
@@ -108,9 +113,9 @@ def main(args):
         top_size = p_layers[-1].dim_X
         rbm = RBMTopLayer(
                         dim_x=top_size,
-                        dim_h=16,
-                        cd_iterations=3,
-                        pcd=100,
+                        dim_h=args.rbm_hiddens,
+                        cd_iterations=args.cd_iterations,
+                        #pcd=100,
                         name="p_top_rbm",
                         weights_init=IsotropicGaussian(std=0.01),
                         biases_init=Constant(0.0))
@@ -174,15 +179,21 @@ def main(args):
 
     if args.step_rule == "momentum":
         step_rule = Momentum(args.learning_rate, 0.95)
+        step_rule_rbm = Momentum(args.learning_rate_rbm, 0.95)
     elif args.step_rule == "rmsprop":
         step_rule = RMSProp(args.learning_rate)
+        step_rule_rbm = RMSProp(args.learning_rate_rbm)
     elif args.step_rule == "adam":
         step_rule = Adam(args.learning_rate)
+        step_rule_rbm = Adam(args.learning_rate_rbm)
     else:
         raise "Unknown step_rule %s" % args.step_rule
 
     cg = ComputationGraph([cost])
     parameters = cg.parameters
+
+    step_rule_rbm_params = Selector(model.p_layers[-1]).get_parameters().values()
+    step_rule_params = [p for p in parameters if p not in step_rule_rbm_params]
 
     algorithm = GradientDescent(
         cost=cost,
@@ -190,7 +201,9 @@ def main(args):
         gradients=gradients,
         step_rule=CompositeRule([
             #StepClipping(25),
-            step_rule,
+            #step_rule,
+            Restrict(step_rule, step_rule_params),
+            Restrict(step_rule_rbm, step_rule_rbm_params),
             #RemoveNotFinite(1.0),
         ])
     )
@@ -277,10 +290,12 @@ if __name__ == "__main__":
                 default="adam", help="Chose SGD alrogithm (default: adam)"),
     parser.add_argument("--lr", "--learning-rate", type=float, dest="learning_rate",
                 default=1e-3, help="Learning rate")
+    parser.add_argument("--lr-rbm", "--learning-rate-rbm", type=float, dest="learning_rate_rbm",
+                default=None, help="Learning rate")
     parser.add_argument("--max-epochs", "--epochs", type=int, dest="max_epochs",
                 default=10000, help="Maximum # of training epochs to run")
     parser.add_argument("--early-stopping", type=int, dest="patience",
-                default=10, help="Number of epochs without improvement (default: 10)")
+                default=20, help="Number of epochs without improvement (default: 10)")
     subparsers = parser.add_subparsers(title="methods", dest="method")
 
     # Continue
@@ -296,6 +311,10 @@ if __name__ == "__main__":
                 help="Reweighted Wake-Sleep")
     subparser.add_argument("--nsamples", "-s", type=int, dest="n_samples",
                 default=10, help="Number of IS samples")
+    subparser.add_argument("--cd-iterations", "--cd", type=int, dest="cd_iterations",
+                default=10, help="Number of CD iterations")
+    subparser.add_argument("--rbm-hiddens", type=int, dest="rbm_hiddens",
+                default=20, help="Number RBM hidden units")
     subparser.add_argument("--no-qbaseline", "--nobase", action="store_true",
                 default=False, help="Deactivate 1/n_samples baseline for Q gradients")
     subparser.add_argument("--deterministic-layers", type=int, dest="deterministic_layers",
