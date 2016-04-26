@@ -35,7 +35,7 @@ def sigmoid(val):
 
 class RBMTopLayer(Initializable, ProbabilisticTopLayer):
     """ Top level RBM """
-    def __init__(self, dim_x, dim_h=None, cd_iterations=3, pcd=None, **kwargs):
+    def __init__(self, dim_x, dim_h=None, cd_iterations=3, pcd_samples=100, pcd_iterations=None, **kwargs):
         super(RBMTopLayer, self).__init__(**kwargs)
 
         if dim_h is None:
@@ -44,8 +44,11 @@ class RBMTopLayer(Initializable, ProbabilisticTopLayer):
         self.dim_x = dim_x
         self.dim_h = dim_h
 
+        assert (cd_iterations is None) ^ (pcd_iterations is None)
+
         self.cd_iterations = cd_iterations
-        self.pcd = pcd
+        self.pcd_iterations = pcd_iterations
+        self.pcd_samples = pcd_samples
 
     def _allocate(self):
         self.b = shared_floatx_zeros((self.dim_x,), name="b")            # visible bias
@@ -53,8 +56,7 @@ class RBMTopLayer(Initializable, ProbabilisticTopLayer):
         self.W = shared_floatx_zeros((self.dim_x, self.dim_h), name="W") # weights
         self.parameters = [self.b, self.c, self.W]
 
-        if self.pcd:
-            self.pcd = shared_floatx_zeros((self.pcd, self.dim_x), name='pcd_samples')
+        self.pcd = shared_floatx_zeros((self.pcd_samples, self.dim_x), name='pcd_samples')
 
     def _initialize(self):
         self.biases_init.initialize(self.b, self.rng)
@@ -240,30 +242,51 @@ class RBMTopLayer(Initializable, ProbabilisticTopLayer):
         ph = self.prob_h_given_v(v)
         h = bernoulli(ph)
         pv = self.prob_v_given_h(h)
+        v = bernoulli(pv)
 
         #unnorm_log_prob = -self.unnorm_log_prob(v).mean()
         #recons_xentropy = tensor.sum(v * tensor.log(pv) + (1-v) * tensor.log(1-pv), axis=1)
         #recons_xentropy.name = "recons_xentropy"
 
         # negative phase from PCD?
-        if self.pcd:
-            v = self.pcd
+        if self.cd_iterations:
+            iterations = self.pcd_iterations
+        else:
+            iterations = self.cd_iterations
+            v = self.pcd_samples
 
-        # negative phase samples CD #k
-        for i in xrange(self.cd_iterations):
+        # negative phase samples
+        for i in xrange(iterations):
             ph = self.prob_h_given_v(v)
             h = bernoulli(ph)
 
             pv = self.prob_v_given_h(h)
             v = bernoulli(pv)
 
+        # negative phase gradients
+        grads_neg = grads(v)
+
+        if self.cd_iterations:
+            # persistent samples 
+            v = self.pcd_samples
+            for i in xrange(iterations):
+                ph = self.prob_h_given_v(v)
+                h = bernoulli(ph)
+
+                pv = self.prob_v_given_h(h)
+                v = bernoulli(pv)
+        else:
+            iterations = self.cd_iterations
+            v = self.pcd_samples
+
+        self.pcd_updates = [(self.pcd, v)]
+
+
+
         if self.pcd:
-            self.pcd_updates = [(self.pcd, v)]
         else:
             self.pcd_updates = []
 
-        # negative phase gradients
-        grads_neg = grads(v)
 
         # Merge positive and negative gradients
         grads = OrderedDict()
