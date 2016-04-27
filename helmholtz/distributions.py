@@ -57,7 +57,7 @@ class BernoulliOp(theano.Op):
         samples[0] = (noise < prob).astype(floatX)
 
     def grad(self, inputs, grads):
-        logger.warning("BernoulliOp.grad(...) called")
+        #logger.warning("BernoulliOp.grad(...) called")
 
         prob = inputs[0]
         noise = inputs[1]
