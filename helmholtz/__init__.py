@@ -35,6 +35,10 @@ def logsumexp(A, axis=None):
     B = tensor.sum(B, axis=axis)
     return B
 
+def logplusexp(a, b):
+    """ Numerically stable log(exp(a)+exp(b)) """
+    m = tensor.maximum(a, b)
+    return tensor.log(tensor.exp(a-m) + tensor.exp(b-m)) + m
 
 def replicate_batch(A, repeat):
     """Extend the given 2d Tensor by repeating reach line *repeat* times.
