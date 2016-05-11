@@ -35,6 +35,10 @@ def logsumexp(A, axis=None):
     B = tensor.sum(B, axis=axis)
     return B
 
+def logplusexp(a, b):
+    """ Numerically stable log(exp(a)+exp(b)) """
+    m = tensor.maximum(a, b)
+    return tensor.log(tensor.exp(a-m) + tensor.exp(b-m)) + m
 
 def logplusexp(a, b):
     """ Compute a numerically stable log(exp(a)+exp(b)) """
