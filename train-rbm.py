@@ -17,7 +17,7 @@ import fuel
 import theano
 import numpy as np
 
-import blocks.extras
+#import blocks.extras
 import blocks
 
 from argparse import ArgumentParser
@@ -101,8 +101,13 @@ def main(args):
         sizes_tag = args.layer_spec.replace(",", "-")
         qbase = "" if not args.no_qbaseline else "noqb-"
 
-        name = "%s-%s-rbm-%s-cd%d--h%d-%slr%s-lrr%s-dl%d-spl%d-%s" % \
-            (args.data, args.method, args.name, args.cd_iterations, args.rbm_hiddens, qbase, lr_tag, lrr_tag, args.deterministic_layers, args.n_samples, sizes_tag)
+        if args.pcd_training:
+            train_tag = "pcd"
+        else:
+            train_tag = "cd%d" % args.cd_iterations
+
+        name = "%s-%s-rbm-%s-%s--h%d-%slr%s-lrr%s-dl%d-spl%d-%s" % \
+            (args.data, args.method, args.name, train_tag, args.rbm_hiddens, qbase, lr_tag, lrr_tag, args.deterministic_layers, args.n_samples, sizes_tag)
 
         p_layers, q_layers = create_layers(
                                 args.layer_spec, x_dim,
@@ -115,7 +120,7 @@ def main(args):
                         dim_x=top_size,
                         dim_h=args.rbm_hiddens,
                         cd_iterations=args.cd_iterations,
-                        #pcd=100,
+                        pcd_training=args.pcd_training,
                         name="p_top_rbm",
                         weights_init=IsotropicGaussian(std=0.01),
                         biases_init=Constant(0.0))
@@ -262,9 +267,9 @@ def main(args):
                         after_epoch=False,
                         after_training=True,
                         every_n_epochs=10),
-                    ComputeLogZ(
-                        rbm=rbm,
-                        every_n_epochs=10),
+                    #ComputeLogZ(
+                    #    rbm=rbm,
+                    #    every_n_epochs=10),
                     TrackTheBest('valid_log_p'),
                     TrackTheBest('valid_log_p_1000'),
                     Checkpoint(name+".pkl", save_separately=['log', 'model']),
@@ -313,6 +318,8 @@ if __name__ == "__main__":
                 default=10, help="Number of IS samples")
     subparser.add_argument("--cd-iterations", "--cd", type=int, dest="cd_iterations",
                 default=10, help="Number of CD iterations")
+    subparser.add_argument("--pcd-training", "--pcd", action="store_true", 
+                help="Use PCD for training")
     subparser.add_argument("--rbm-hiddens", type=int, dest="rbm_hiddens",
                 default=20, help="Number RBM hidden units")
     subparser.add_argument("--no-qbaseline", "--nobase", action="store_true",

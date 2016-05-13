@@ -35,7 +35,7 @@ def sigmoid(val):
 
 class RBMTopLayer(Initializable, ProbabilisticTopLayer):
     """ Top level RBM """
-    def __init__(self, dim_x, dim_h=None, cd_iterations=3, pcd_samples=100, pcd_iterations=None, **kwargs):
+    def __init__(self, dim_x, dim_h=None, cd_iterations=5, pcd_training=False, persistent_samples=100, persistent_iterations=5, **kwargs):
         super(RBMTopLayer, self).__init__(**kwargs)
 
         if dim_h is None:
@@ -44,11 +44,10 @@ class RBMTopLayer(Initializable, ProbabilisticTopLayer):
         self.dim_x = dim_x
         self.dim_h = dim_h
 
-        assert (cd_iterations is None) ^ (pcd_iterations is None)
-
         self.cd_iterations = cd_iterations
-        self.pcd_iterations = pcd_iterations
-        self.pcd_samples = pcd_samples
+        self.pcd_training = pcd_training
+        self.persistent_iterations = persistent_iterations
+        self.persistent_samples = persistent_samples
 
     def _allocate(self):
         self.b = shared_floatx_zeros((self.dim_x,), name="b")            # visible bias
@@ -56,7 +55,8 @@ class RBMTopLayer(Initializable, ProbabilisticTopLayer):
         self.W = shared_floatx_zeros((self.dim_x, self.dim_h), name="W") # weights
         self.parameters = [self.b, self.c, self.W]
 
-        self.pcd = shared_floatx_zeros((self.pcd_samples, self.dim_x), name='pcd_samples')
+        if self.persistent_samples is not None:
+            self.persistent_samples = shared_floatx_zeros((self.persistent_samples, self.dim_x), name='persistent_samples')
 
     def _initialize(self):
         self.biases_init.initialize(self.b, self.rng)
@@ -227,6 +227,8 @@ class RBMTopLayer(Initializable, ProbabilisticTopLayer):
     def get_gradients(self, v, weights=1.):
         """ Return gradients and reconstruction cross entropy to monitor progress.
         """
+
+        # Calculate gradients 
         def grads(v):
             cost = -self.unnorm_log_prob(v).mean()
 
@@ -236,57 +238,39 @@ class RBMTopLayer(Initializable, ProbabilisticTopLayer):
                 (self.W, theano.grad(cost, self.W, consider_constant=[v])),
             ))
 
+          
         # gradients for the positive phase
         grads_pos = grads(v)
 
-        ph = self.prob_h_given_v(v)
-        h = bernoulli(ph)
-        pv = self.prob_v_given_h(h)
-        v = bernoulli(pv)
+        # CD training?
+        if not self.pcd_training:
+            for _ in xrange(self.cd_iterations):
+                ph = self.prob_h_given_v(v)
+                h = bernoulli(ph)
+                pv = self.prob_v_given_h(h)
+                v = bernoulli(pv)
+            grads_neg = grads(v)
+
+        # Advance negative samples
+        if self.persistent_samples is not None:
+            # negative phase samples
+            v = self.persistent_samples
+            for i in xrange(self.persistent_iterations):
+                ph = self.prob_h_given_v(v)
+                h = bernoulli(ph)
+                pv = self.prob_v_given_h(h)
+                v = bernoulli(pv)
+
+            self.pcd_updates = [(self.persistent_samples, v)]
+            if self.pcd_training:
+                grads_neg = grads(v)
+        else:
+            self.pcd_updates = []
+
 
         #unnorm_log_prob = -self.unnorm_log_prob(v).mean()
         #recons_xentropy = tensor.sum(v * tensor.log(pv) + (1-v) * tensor.log(1-pv), axis=1)
         #recons_xentropy.name = "recons_xentropy"
-
-        # negative phase from PCD?
-        if self.cd_iterations:
-            iterations = self.pcd_iterations
-        else:
-            iterations = self.cd_iterations
-            v = self.pcd_samples
-
-        # negative phase samples
-        for i in xrange(iterations):
-            ph = self.prob_h_given_v(v)
-            h = bernoulli(ph)
-
-            pv = self.prob_v_given_h(h)
-            v = bernoulli(pv)
-
-        # negative phase gradients
-        grads_neg = grads(v)
-
-        if self.cd_iterations:
-            # persistent samples 
-            v = self.pcd_samples
-            for i in xrange(iterations):
-                ph = self.prob_h_given_v(v)
-                h = bernoulli(ph)
-
-                pv = self.prob_v_given_h(h)
-                v = bernoulli(pv)
-        else:
-            iterations = self.cd_iterations
-            v = self.pcd_samples
-
-        self.pcd_updates = [(self.pcd, v)]
-
-
-
-        if self.pcd:
-        else:
-            self.pcd_updates = []
-
 
         # Merge positive and negative gradients
         grads = OrderedDict()
