@@ -26,12 +26,101 @@ from blocks.bricks import Random, Initializable, MLP, Tanh, Logistic
 logger = logging.getLogger(__name__)
 floatX = theano.config.floatX
 
+#-----------------------------------------------------------------------------
+
+def rev(samples):
+    return [h[::-1] for h in samples]
+
+def sample_given_x(layers0, layers):
+    n_stapes = 14
+
+    h0 = [None                                       for i in xrange(n_steps)]
+    h1 = [tensor.zeros([n_samples, layers[1].dim_X]) for i in xrange(n_steps+1)]
+    h2 = [tensor.zeros([n_samples, layers[2].dim_X]) for i in xrange(n_steps+2)]
+
+    log_prob0 = [None for _ in xrange(n_steps)]
+    log_prob1 = [None for _ in xrange(n_steps+1)]
+    log_prob2 = [None for _ in xrange(n_steps+2)]
+
+    # step 0
+    log_prob0[0] = layers0[0].log_prob(h0[0])
+    h1[1], log_prob1[1] = layers0[1].sample(h0[0])
+    h2[2], log_prob2[2] = layers0[2].sample(h1[1])
+
+    # step 1...N
+    for step in xrange(1, n_steps):
+        c0 = tensor.concatenate([            h0[step-1], h1[step+0]], axis=1)
+        h0[step+0], log_prob0[step+0] = layers[0].log_prob(h0[step], c0)
+
+        c1 = tensor.concatenate([h0[step+0], h1[step+0], h2[step+1]], axis=1)
+        h1[step+1], log_prob1[step+1] = layers[1].sample(c1)
+
+        c2 = tensor.concatenate([h1[step+1], h2[step+1]            ], axis=1)
+        h2[step+2], log_prob2[step+2] = layers[2].sample(c2)
+
+    return [h0, h1, h2], [log_prob0, log_prob1, log_prob2]
+
+def sample_sequence(n_samples, layers0, layers):
+    n_steps = 14
+
+    h0 = [None                                       for i in xrange(n_steps)]
+    h1 = [tensor.zeros([n_samples, layers[1].dim_X]) for i in xrange(n_steps+1)]
+    h2 = [tensor.zeros([n_samples, layers[2].dim_X]) for i in xrange(n_steps+2)]
+
+    log_prob0 = [None for _ in xrange(n_steps)]
+    log_prob1 = [None for _ in xrange(n_steps+1)]
+    log_prob2 = [None for _ in xrange(n_steps+2)]
+
+    # step 0
+    h0[0], log_prob0[0] = layers0[0].sample(n_samples)
+    h1[1], log_prob1[1] = layers0[1].sample(h0[0])
+    h2[2], log_prob2[2] = layers0[2].sample(h1[1])
+
+    # step 1...N
+    for step in xrange(1, n_steps):
+        c0 = tensor.concatenate([            h0[step-1], h1[step+0]], axis=1)
+        h0[step+0], log_prob0[step+0] = layers[0].sample(c0)
+
+        c1 = tensor.concatenate([h0[step+0], h1[step+0], h2[step+1]], axis=1)
+        h1[step+1], log_prob1[step+1] = layers[1].sample(c1)
+
+        c2 = tensor.concatenate([h1[step+1], h2[step+1]            ], axis=1)
+        h2[step+2], log_prob2[step+2] = layers[2].sample(c2)
+
+    return [h0, h1, h2], [log_prob0, log_prob1, log_prob2]
+
+
+def log_prob_sequence(samples, layers0, layers):
+    n_steps = 14
+
+    h0, h1, h2 = samples
+
+    log_prob0 = [None for _ in xrange(n_steps)]
+    log_prob1 = [None for _ in xrange(n_steps+1)]
+    log_prob2 = [None for _ in xrange(n_steps+2)]
+
+    # step 0
+    log_prob0[0] = layers0[0].log_prob(h0[0])
+    log_prob1[1] = layers0[1].log_prob(h1[1], h0[0])
+    log_prob2[2] = layers0[2].log_prob(h2[2], h1[1])
+
+    # step 1...N
+    for step in xrange(1, n_steps):
+        c0 = tensor.concatenate([            h0[step-1], h1[step+0]], axis=1)
+        log_prob0[step+0] = layers[0].log_prob(h0[step+0], c0)
+
+        c1 = tensor.concatenate([h0[step+0], h1[step+0], h2[step+1]], axis=1)
+        log_prob1[step+1] = layers[1].log_prob(h1[step+1], c1)
+
+        c2 = tensor.concatenate([h1[step+1], h2[step+1]            ], axis=1)
+        log_prob2[step+2] = layers[2].log_prob(h2[step+2], c2)
+
+    return log_prob0, log_prob1, log_prob2
+
 
 #-----------------------------------------------------------------------------
 
-
 class BiSeq(HelmholtzMachine):
-
     def __init__(self, layer_sizes, n_steps, **kwargs):
         super(BiSeq, self).__init__([], [], **kwargs)
 
@@ -106,7 +195,6 @@ class BiSeq(HelmholtzMachine):
 
 
         def sample_forward(x, p_layers0, p_layers, q_layers0, q_layers):
-
             h0 = [x[:, i, :]                                 for i in xrange(n_steps)]
             h1 = [tensor.zeros([total_size, layer_sizes[1]]) for i in xrange(n_steps+1)]
             h2 = [tensor.zeros([total_size, layer_sizes[2]]) for i in xrange(n_steps+2)]
@@ -120,7 +208,7 @@ class BiSeq(HelmholtzMachine):
             log_q2 = [None] * (n_steps+2)
 
             #--------------------------------------------------------------------------
-            # P proposal
+            # draw proposal samples
 
             # step 0
             log_p0[0] = p_layers0[0].log_prob(h0[0])
@@ -135,7 +223,7 @@ class BiSeq(HelmholtzMachine):
                 c1 = tensor.concatenate([h0[step+0], h1[step+0], h2[step+1]], axis=1)
                 h1[step+1], log_p1[step+1] = p_layers[1].sample(c1)
 
-                c2 = tensor.concatenate([            h1[step+1], h2[step+1]], axis=1)
+                c2 = tensor.concatenate([h1[step+1], h2[step+1]            ], axis=1)
                 h2[step+2], log_p2[step+2] = p_layers[2].sample(c2)
 
             # Compute Q
@@ -207,16 +295,44 @@ class BiSeq(HelmholtzMachine):
         x = replicate_batch(features, n_samples)
         x = x.reshape([batch_size*n_samples, n_steps, layer_sizes[0]])
 
-        log_ps1, gradients1 = sample_forward(x, p_layers0, p_layers, q_layers0, q_layers)
+        log_ps1, gradients1 = sample_forward(x            , p_layers0, p_layers, q_layers0, q_layers)
         log_ps2, gradients2 = sample_forward(x[:, ::-1, :], q_layers0, q_layers, p_layers0, p_layers)
 
         log_ps = logplusexp(log_ps1, log_ps2)
         gradients = merge_gradients(gradients1, gradients2)
+        # log_ps = log_ps1
+        # gradients = gradients1
 
         return log_ps, gradients
 
 
     #==================================================================================
+
+    def estimate_log_z(self, n_samples):
+        p_layers  = self.p_layers
+        p_layers0 = self.p_layers0
+        q_layers  = self.q_layers
+        q_layers0 = self.q_layers0
+        n_layers  = len(p_layers)
+
+        samples, log_prob_p = sample_sequence(n_samples, p_layers0, p_layers)
+        log_prob_q = log_prob_sequence(rev(samples), q_layers0, q_layers)
+
+        log_prob_p0, log_prob_p1, log_prob_p2 = log_prob_p
+        log_prob_q0, log_prob_q1, log_prob_q2 = log_prob_q
+
+        log_prob_p = sum(log_prob_p0) + sum(log_prob_p1[1:-1]) + sum(log_prob_p2[2:-2])
+        log_prob_q = sum(log_prob_q0) + sum(log_prob_q1[1:-1]) + sum(log_prob_q2[2:-2])
+
+        log_prob1  = (log_prob_q - log_prob_p) / 2
+
+        # samples, log_prob1 = sample_sequence(n_samples, p_layers0, p_layers)
+        # log_prob2 = log_prob_sequence(rev(samples), q_layers0, q_layers)
+        #
+        # log_prob_p = (sum(log_prob2) - sum(log_prob1)) / 2
+        # log_prob_p = (log_prob2 - log_prob1) / 2
+
+        return log_prob1, log_prob1
 
 
     # #@application(inputs=['n_samples'], outputs=['samples', 'log_p', 'log_q'])
