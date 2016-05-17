@@ -315,6 +315,7 @@ class BiSeq(HelmholtzMachine):
         q_layers0 = self.q_layers0
         n_layers  = len(p_layers)
 
+        # P proposals
         samples, log_prob_p = sample_sequence(n_samples, p_layers0, p_layers)
         log_prob_q = log_prob_sequence(rev(samples), q_layers0, q_layers)
 
@@ -326,13 +327,19 @@ class BiSeq(HelmholtzMachine):
 
         log_prob1  = (log_prob_q - log_prob_p) / 2
 
-        # samples, log_prob1 = sample_sequence(n_samples, p_layers0, p_layers)
-        # log_prob2 = log_prob_sequence(rev(samples), q_layers0, q_layers)
-        #
-        # log_prob_p = (sum(log_prob2) - sum(log_prob1)) / 2
-        # log_prob_p = (log_prob2 - log_prob1) / 2
+        # Q proposals
+        samples, log_prob_q = sample_sequence(n_samples, q_layers0, q_layers)
+        log_prob_p = log_prob_sequence(rev(samples), p_layers0, p_layers)
 
-        return log_prob1, log_prob1
+        log_prob_q0, log_prob_q1, log_prob_q2 = log_prob_q
+        log_prob_p0, log_prob_p1, log_prob_p2 = log_prob_p
+
+        log_prob_p = sum(log_prob_p0) + sum(log_prob_p1[1:-1]) + sum(log_prob_p2[2:-2])
+        log_prob_q = sum(log_prob_q0) + sum(log_prob_q1[1:-1]) + sum(log_prob_q2[2:-2])
+
+        log_prob2  = (log_prob_p - log_prob_q) / 2
+
+        return log_prob1, log_prob2
 
 
     # #@application(inputs=['n_samples'], outputs=['samples', 'log_p', 'log_q'])

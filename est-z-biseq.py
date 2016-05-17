@@ -83,6 +83,10 @@ if __name__ == "__main__":
 
     log_z1, log_z2 = brick.estimate_log_z(n_samples)
 
+
+    log_z1 = logsumexp(log_z1)
+    log_z2 = logsumexp(log_z2)
+
     do_z = theano.function(
                         [n_samples],
                         [log_z1, log_z2],
@@ -97,17 +101,23 @@ if __name__ == "__main__":
     log_z1  = []
     log_z2 = []
 
+    def calc_estimate(log_z_list):
+        return misc.logsumexp(log_z_list) - np.log(batch_size * len(log_z_list))
+
     for k in xrange(0, args.nsamples, batch_size):
-        psxp, psxp2 = do_z(batch_size)
+        log_z1_, log_z2_ = do_z(batch_size)
 
-        import ipdb; ipdb.set_trace()
+        log_z1.append(float(log_z1_))
+        log_z2.append(float(log_z2_))
 
-        # psxp, psxp2 = float(psxp), float(psxp2)
+        if k % 1000 == 0:
+            print("log Z ~= %5.3f  (%d P samples)" % (calc_estimate(log_z1), k))
+            print("log Z ~= %5.3f  (%d Q samples)" % (calc_estimate(log_z2), k))
 
-        # n_samples.append(k)
-        # log_psxp.append(psxp)
-        # log_psxp2.append(psxp2)
+    print("log Z ~= %5.3f  (%d P samples)" % (calc_estimate(log_z1), args.nsamples))
+    print("log Z ~= %5.3f  (%d Q samples)" % (calc_estimate(log_z2), args.nsamples))
 
+    exit(0)
 
     import pandas as pd
     df = pd.DataFrame({'k': n_samples, 'log_psxp': log_psxp, 'log_psxp2': log_psxp2})
