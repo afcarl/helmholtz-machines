@@ -289,7 +289,7 @@ if __name__ == "__main__":
     parser.add_argument("--live-plotting", "--plot", action="store_true", default=False,
                 help="Enable live plotting to a Bokkeh server")
     parser.add_argument("--bs", "--batch-size", type=int, dest="batch_size",
-                default=100, help="Size of each mini-batch (default: 100)")
+                default=10, help="Size of each mini-batch (default: 10)")
     parser.add_argument("--step-rule", choices=['momentum', 'adam', 'rmsprop'], dest="step_rule",
                 default="adam", help="Chose SGD alrogithm (default: adam)"),
     parser.add_argument("--lr", "--learning-rate", type=float, dest="learning_rate",
