@@ -20,6 +20,7 @@ from argparse import ArgumentParser
 from progressbar import ProgressBar
 from scipy import stats
 
+from blocks.extensions import SimpleExtension
 from blocks.main_loop import MainLoop
 from blocks.serialization import load
 
@@ -30,7 +31,8 @@ import helmholtz.datasets as datasets
 from helmholtz import logsumexp
 from helmholtz.biseq import BiSeq
 
-logger = logging.getLogger("sample.py")
+#logger = logging.getLogger("sample.py")
+logger = logging.getLogger(__name__)
 
 FORMAT = '[%(asctime)s] %(name)-15s %(message)s'
 DATEFMT = "%H:%M:%S"
@@ -122,3 +124,68 @@ if __name__ == "__main__":
     import pandas as pd
     df = pd.DataFrame({'k': n_samples, 'log_psxp': log_psxp, 'log_psxp2': log_psxp2})
     df.save("est-Z-inner%d.pkl" % (args.ninner))
+
+
+#----------------------------------------------------------------------------
+
+
+class EstimateLogZ(SimpleExtension):
+    def __init__(self, model, n_samples=100000, batch_size=100, **kwargs):
+        kwargs.setdefault("before_first_epoch", True)
+        kwargs.setdefault("after_training", True)
+        kwargs.setdefault("on_interrupt", True)
+
+        self.model = model
+        self.n_samples = n_samples
+        self.batch_size = batch_size
+        self._compile()
+
+        super(EstimateLogZ, self).__init__(**kwargs)
+
+    def _compile(self):
+        logger.info("Compile estimate_z")
+
+        batch_size = tensor.iscalar('batch_size')
+        log_z_p, log_z_q = self.model.estimate_log_z(batch_size)
+        log_z_p = logsumexp(log_z_p)
+        log_z_q = logsumexp(log_z_q)
+
+        self.do_est = theano.function(
+                        [batch_size],
+                        [log_z_p, log_z_q],
+                        name="estimate_log_z")
+
+    def estimate_log_z(self):
+        lzest_p = []
+        lzest_q = []
+
+        logger.info("Estimating log Z started")
+        for k in range(0, self.n_samples, self.batch_size):
+            lzest_p_, lzest_q_ = self.do_est(self.batch_size)
+
+            lzest_p.append(float(lzest_p_))
+            lzest_q.append(float(lzest_q_))
+        
+        lzest_p = misc.logsumexp(lzest_p) - np.log(self.n_samples)
+        lzest_q = misc.logsumexp(lzest_q) - np.log(self.n_samples)
+
+        logger.info("Estimating log Z finished")
+        return lzest_p, lzest_q
+        
+
+    def do(self, which_callback, *args):
+        cur_row = self.main_loop.log.current_row
+
+        log_z_p, log_z_q = self.estimate_log_z()
+
+        cur_row['log_z'] = log_z_p
+        cur_row['log_z_p'] = log_z_p
+        cur_row['log_z_q'] = log_z_q
+
+        # add new entries
+        for key, value in cur_row.items():
+            if not "_ps" in key:
+                continue
+            new_entry = key.replace("_ps", "_p")
+            cur_row[new_entry] = value + log_z_p
+

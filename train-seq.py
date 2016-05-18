@@ -45,12 +45,12 @@ from blocks.main_loop import MainLoop
 from blocks.roles import add_role, WEIGHT, BIAS, PARAMETER
 from blocks.utils import shared_floatx
 
-from blocks_extras.extensions.plot import PlotManager, Plotter, DisplayImage
-from blocks_extras.extensions.display import ImageDataStreamDisplay, WeightDisplay, ImageSamplesDisplay
-
 import helmholtz.datasets as datasets
 
 from helmholtz.biseq import BiSeq
+
+est_z = __import__("est-z-biseq")
+EstimateLogZ = est_z.EstimateLogZ
 
 floatX = theano.config.floatX
 fuel.config.floatX = floatX
@@ -263,6 +263,9 @@ def main(args):
                         after_epoch=False,
                         after_training=True,
                         every_n_epochs=10),
+                    EstimateLogZ(
+                        model, 
+                        every_n_epochs=1),
                     #SharedVariableModifier(
                     #    algorithm.step_rule.components[0].learning_rate,
                     #    half_lr_func,
