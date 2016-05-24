@@ -46,7 +46,7 @@ if __name__ == "__main__":
     parser.add_argument("--data", "-d", dest='data', choices=datasets.supported_datasets,
                 default='bmnist', help="Dataset to use")
     parser.add_argument("--nsamples", "--samples", "-s", type=int,
-            default=1000000, help="no. of samples to draw")
+            default=100000000, help="no. of samples to draw")
     parser.add_argument("--ninner", type=int,
             default=10, help="no. of samples to draw")
     parser.add_argument("--batch-size", "-bs", type=int,
@@ -112,7 +112,7 @@ if __name__ == "__main__":
         log_z1.append(float(log_z1_))
         log_z2.append(float(log_z2_))
 
-        if k % 1000 == 0:
+        if k % 1000000 == 0:
             print("log Z ~= %5.3f  (%d P samples)" % (calc_estimate(log_z1), k))
             print("log Z ~= %5.3f  (%d Q samples)" % (calc_estimate(log_z2), k))
 

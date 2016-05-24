@@ -26,15 +26,17 @@ from blocks.bricks import Random, Initializable, MLP, Tanh, Logistic
 logger = logging.getLogger(__name__)
 floatX = theano.config.floatX
 
+n_steps = 14
+
 #-----------------------------------------------------------------------------
 
 def rev(samples):
     return [h[::-1] for h in samples]
 
-def sample_given_x(layers0, layers):
-    n_stapes = 14
+def sample_given_x(x, layers0, layers):
+    n_samples = x.shape[0]
 
-    h0 = [None                                       for i in xrange(n_steps)]
+    h0 = [x[:, i, :]                                 for i in xrange(n_steps)]
     h1 = [tensor.zeros([n_samples, layers[1].dim_X]) for i in xrange(n_steps+1)]
     h2 = [tensor.zeros([n_samples, layers[2].dim_X]) for i in xrange(n_steps+2)]
 
@@ -44,13 +46,15 @@ def sample_given_x(layers0, layers):
 
     # step 0
     log_prob0[0] = layers0[0].log_prob(h0[0])
+    #log_prob0[0] = tensor.zeros([n_samples])
     h1[1], log_prob1[1] = layers0[1].sample(h0[0])
     h2[2], log_prob2[2] = layers0[2].sample(h1[1])
 
     # step 1...N
     for step in xrange(1, n_steps):
         c0 = tensor.concatenate([            h0[step-1], h1[step+0]], axis=1)
-        h0[step+0], log_prob0[step+0] = layers[0].log_prob(h0[step], c0)
+        log_prob0[step+0] = layers[0].log_prob(h0[step], c0)
+        #log_prob0[step+0] = tensor.zeros([n_samples])
 
         c1 = tensor.concatenate([h0[step+0], h1[step+0], h2[step+1]], axis=1)
         h1[step+1], log_prob1[step+1] = layers[1].sample(c1)
@@ -61,7 +65,6 @@ def sample_given_x(layers0, layers):
     return [h0, h1, h2], [log_prob0, log_prob1, log_prob2]
 
 def sample_sequence(n_samples, layers0, layers):
-    n_steps = 14
 
     h0 = [None                                       for i in xrange(n_steps)]
     h1 = [tensor.zeros([n_samples, layers[1].dim_X]) for i in xrange(n_steps+1)]
@@ -91,7 +94,6 @@ def sample_sequence(n_samples, layers0, layers):
 
 
 def log_prob_sequence(samples, layers0, layers):
-    n_steps = 14
 
     h0, h1, h2 = samples
 
@@ -193,118 +195,72 @@ class BiSeq(HelmholtzMachine):
         n_steps = self.n_steps
         layer_sizes = self.layer_sizes
 
-
-        def sample_forward(x, p_layers0, p_layers, q_layers0, q_layers):
-            h0 = [x[:, i, :]                                 for i in xrange(n_steps)]
-            h1 = [tensor.zeros([total_size, layer_sizes[1]]) for i in xrange(n_steps+1)]
-            h2 = [tensor.zeros([total_size, layer_sizes[2]]) for i in xrange(n_steps+2)]
-
-            log_p0 = [None] * (n_steps)
-            log_p1 = [None] * (n_steps+1)
-            log_p2 = [None] * (n_steps+2)
-
-            log_q0 = [None] * (n_steps)
-            log_q1 = [None] * (n_steps+1)
-            log_q2 = [None] * (n_steps+2)
-
-            #--------------------------------------------------------------------------
-            # draw proposal samples
-
-            # step 0
-            log_p0[0] = p_layers0[0].log_prob(h0[0])
-            h1[1], log_p1[1] = p_layers0[1].sample(h0[0])
-            h2[2], log_p2[2] = p_layers0[2].sample(h1[1])
-
-            # step 1...N
-            for step in xrange(1, n_steps):
-                c0 = tensor.concatenate([h0[step-1], h1[step+0]            ], axis=1)
-                log_p0[step] = p_layers[0].log_prob(h0[step], c0)
-
-                c1 = tensor.concatenate([h0[step+0], h1[step+0], h2[step+1]], axis=1)
-                h1[step+1], log_p1[step+1] = p_layers[1].sample(c1)
-
-                c2 = tensor.concatenate([h1[step+1], h2[step+1]            ], axis=1)
-                h2[step+2], log_p2[step+2] = p_layers[2].sample(c2)
-
-            # Compute Q
-
-            # step N
-            log_q0[n_steps-1] = q_layers0[0].log_prob(h0[n_steps-1])
-            log_q1[n_steps-1] = q_layers0[1].log_prob(h1[n_steps-1], h0[n_steps-1])
-            log_q2[n_steps-1] = q_layers0[2].log_prob(h2[n_steps-1], h1[n_steps-1])
-
-            # step 0..N-1
-            for step in xrange(0, n_steps-1):
-                c0 = tensor.concatenate([h0[step+1], h1[step+1]            ], axis=1)
-                log_q0[step] = q_layers[0].log_prob(h0[step], c0)
-
-                c1 = tensor.concatenate([h0[step+0], h1[step+1], h2[step+1]], axis=1)
-                log_q1[step] = q_layers[1].log_prob(h1[step], c1)
-
-                c2 = tensor.concatenate([            h1[step+1], h2[step+1]], axis=1)
-                log_q2[step] = q_layers[2].log_prob(h2[step], c2)
-
-            #import ipdb; ipdb.set_trace()
-
-            # Remove unnecessary steps
-            h1 = h1[1:-1]
-            h2 = h2[2:-2]
-
-            log_p1 = log_p1[1:-1]
-            log_p2 = log_p2[2:-2]
-
-            log_q1 = log_q1[1:-1]
-            log_q2 = log_q2[2:-2]
-
-            log_ps_joint = (sum(log_p0) + sum(log_p1) + sum(log_p2) +
-                            sum(log_q0) + sum(log_q1) + sum(log_q2)) / 2
-
-            log_proposals = sum(log_p1) + sum(log_p2)
-
-
-            # Calculate sampling weights
-            log_pq = log_ps_joint - log_proposals
-            log_pq = log_pq.reshape([batch_size, n_samples])
-            log_ps = logsumexp(log_pq, axis=1) - tensor.log(n_samples)
-
-            w_norm = logsumexp(log_pq, axis=1)
-            log_w = log_pq - tensor.shape_padright(w_norm)
-            w = tensor.exp(log_w)                           # shape batch x n_samples
-
-            w = w.reshape([batch_size*n_samples])           # shape N
-
-
-            # Calculate gradients
-            gradients = OrderedDict()
-
-            # cost
-            grad_cost = w * log_ps_joint
-            grad_cost = -grad_cost.sum()
-
-            params = Selector(self).get_parameters()
-            for pname, param in params.iteritems():
-                gradients[param] = tensor.grad(grad_cost, param, consider_constant=h0+h1+h2+[w])
-
-            return log_ps, gradients
-
-        #--------------------------------------------------------------------------------------------------
-
         batch_size = features.shape[0]
         total_size = batch_size * n_samples
 
         x = replicate_batch(features, n_samples)
         x = x.reshape([batch_size*n_samples, n_steps, layer_sizes[0]])
 
-        log_ps1, gradients1 = sample_forward(x            , p_layers0, p_layers, q_layers0, q_layers)
-        log_ps2, gradients2 = sample_forward(x[:, ::-1, :], q_layers0, q_layers, p_layers0, p_layers)
+        samples_p, log_pp = sample_given_x(x            , p_layers0, p_layers)
+        samples_q, log_qq = sample_given_x(x[:, ::-1, :], q_layers0, q_layers)
+        samples_q = rev(samples_q)
+        log_qq = rev(log_qq)
 
-        log_ps = logplusexp(log_ps1, log_ps2)
-        gradients = merge_gradients(gradients1, gradients2)
-        # log_ps = log_ps1
-        # gradients = gradients1
+        log_qp = log_prob_sequence(samples_q     , p_layers0, p_layers)
+        log_pq = log_prob_sequence(rev(samples_p), q_layers0, q_layers)
+        log_pq = rev(log_pq)
 
-        return log_ps, gradients
+        # 
+        samples_p = [h[i:len(h)-i] for i, h in enumerate(samples_p)]
+        samples_q = [h[i:len(h)-i] for i, h in enumerate(samples_q)]
 
+        log_pp = [lp[i:len(lp)-i] for i, lp in enumerate(log_pp)]
+        log_pq = [lp[i:len(lp)-i] for i, lp in enumerate(log_pq)]
+        log_qp = [lp[i:len(lp)-i] for i, lp in enumerate(log_qp)]
+        log_qq = [lp[i:len(lp)-i] for i, lp in enumerate(log_qq)]
+
+        log_p_prop = sum([sum(lp) for lp in log_pp[1:]]).reshape([batch_size, n_samples])
+        log_q_prop = sum([sum(lp) for lp in log_qq[1:]]).reshape([batch_size, n_samples])
+
+        log_pp = sum([sum(lp) for lp in log_pp]).reshape([batch_size, n_samples])
+        log_pq = sum([sum(lp) for lp in log_pq]).reshape([batch_size, n_samples])
+        log_qp = sum([sum(lp) for lp in log_qp]).reshape([batch_size, n_samples])
+        log_qq = sum([sum(lp) for lp in log_qq]).reshape([batch_size, n_samples])
+
+        log_ps_p = (log_pp + log_pq) / 2                 # shape batch x n_samples 
+        log_ps_q = (log_qp + log_qq) / 2                 # shape batch x n_samples
+
+        log_psmq_p = log_ps_p - log_p_prop               # shape batch x n_samples
+        log_psmq_q = log_ps_q - log_q_prop               # shape batch x n_samples
+
+        log_ps   = tensor.concatenate([log_ps_p  , log_ps_q]  , axis=1) # shape batch x 2 n_samples
+        log_psmq = tensor.concatenate([log_psmq_p, log_psmq_q], axis=1) # shape batch x 2 n_samples
+
+        log_px = logsumexp(log_psmq, axis=1) - tensor.log(2*n_samples)  # shape batch 
+        w_norm = logsumexp(log_psmq, axis=1)                            # shape batch 
+        log_w = log_psmq - tensor.shape_padright(w_norm)   # shape batch x 2 n_samples
+        w = tensor.exp(log_w)                              # shape batch x 2 n_samples
+
+        log_ps = log_ps.reshape([batch_size*2*n_samples])  # shape N
+        w = w.reshape([batch_size*2*n_samples])            # shape N
+
+        # samples
+        h0_p, h1_p, h2_p = samples_p
+        h0_q, h1_q, h2_q = samples_q
+        h0, h1, h2 = h0_p + h0_q, h1_p + h1_q, h2_p + h2_q
+
+        # Calculate gradients
+        gradients = OrderedDict()
+
+        # cost
+        grad_cost = w * log_ps
+        grad_cost = -grad_cost.sum()
+
+        params = Selector(self).get_parameters()
+        for pname, param in params.iteritems():
+            gradients[param] = tensor.grad(grad_cost, param, consider_constant=h0+h1+h2+[w])
+
+        return log_px, gradients
 
     #==================================================================================
 
