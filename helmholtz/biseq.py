@@ -238,11 +238,11 @@ class BiSeq(HelmholtzMachine):
 
         log_px = logsumexp(log_psmq, axis=1) - tensor.log(2*n_samples)  # shape batch 
         w_norm = logsumexp(log_psmq, axis=1)                            # shape batch 
-        log_w = log_psmq - tensor.shape_padright(w_norm)   # shape batch x 2 n_samples
-        w = tensor.exp(log_w)                              # shape batch x 2 n_samples
+        log_w = log_psmq - tensor.shape_padright(w_norm)                # shape batch x 2 n_samples
+        w = tensor.exp(log_w)                                           # shape batch x 2 n_samples
 
-        log_ps = log_ps.reshape([batch_size*2*n_samples])  # shape N
-        w = w.reshape([batch_size*2*n_samples])            # shape N
+        log_ps = log_ps.reshape([batch_size*2*n_samples])               # shape N
+        w = w.reshape([batch_size*2*n_samples])                         # shape N
 
         # samples
         h0_p, h1_p, h2_p = samples_p
@@ -298,27 +298,30 @@ class BiSeq(HelmholtzMachine):
         return log_prob1, log_prob2
 
 
-    # #@application(inputs=['n_samples'], outputs=['samples', 'log_p', 'log_q'])
-    # def sample_p(self, n_samples):
-    #     """
-    #     """
-    #     p_layers = self.p_layers
-    #     q_layers = self.q_layers
-    #     n_layers = len(p_layers)
-    #
-    #     samples = [None] * n_layers
-    #     log_p = [None] * n_layers
-    #
-    #     samples[n_layers - 1], log_p[n_layers - 1] = p_layers[n_layers - 1].sample(n_samples)
-    #     for l in reversed(xrange(1, n_layers)):
-    #         samples[l - 1], log_p[l - 1] = p_layers[l - 1].sample(samples[l])
-    #
-    #     # Get log_q
-    #     log_q = self.log_prob_q(samples)
-    #
-    #     return samples, log_p, log_q
-    #
-    #
+    @application(inputs=['n_samples'], outputs=['samples'])
+    def sample_p(self, n_samples):
+        """
+        """
+        p_layers  = self.p_layers
+        p_layers0 = self.p_layers0
+
+        samples, _ = sample_sequence(n_samples, p_layers0, p_layers)
+
+        return samples
+
+    @application(inputs=['n_samples'], outputs=['samples'])
+    def sample_q(self, n_samples):
+        """
+        """
+        q_layers  = self.q_layers
+        q_layers0 = self.q_layers0
+
+        samples, _ = sample_sequence(n_samples, q_layers0, q_layers)
+        samples = rev(samples)
+
+        return samples
+   
+   
     # #@application(inputs=['features'],
     # #             outputs=['samples', 'log_q', 'log_p'])
     # def sample_q(self, features):

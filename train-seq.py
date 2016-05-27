@@ -136,7 +136,7 @@ def main(args):
     train_monitors = []
     valid_monitors = []
     test_monitors = []
-    for s in [1, 10, 100]:
+    for s in [1, 10, 1000]:
         log_ps = model.log_likelihood(x, s)
         log_ps = -log_ps.mean()
         log_ps.name  = "log_ps_%d" % s
@@ -262,7 +262,7 @@ def main(args):
                         prefix="test",
                         after_epoch=False,
                         after_training=True,
-                        every_n_epochs=10),
+                        every_n_epochs=1),
                     EstimateLogZ(
                         model, 
                         every_n_epochs=1),
