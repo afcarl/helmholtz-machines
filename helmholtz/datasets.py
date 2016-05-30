@@ -116,8 +116,8 @@ def get_data(data_name):
         x_dim = width * width
 
         data_train = Bars(num_examples=5000, width=width, sources=['features'])
-        data_valid = Bars(num_examples=5000, width=width, sources=['features'])
-        data_test = Bars(num_examples=5000, width=width, sources=['features'])
+        data_valid = Bars(num_examples=1000, width=width, sources=['features'])
+        data_test = Bars(num_examples=1000, width=width, sources=['features'])
     elif data_name in local_datasets:
         from fuel.datasets.hdf5 import H5PYDataset
 
