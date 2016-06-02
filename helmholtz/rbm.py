@@ -5,20 +5,25 @@ import logging
 import numpy
 import theano
 
+import scipy.misc as misc
+
 from collections import OrderedDict
 from theano import tensor
 from theano.sandbox.rng_mrg import MRG_RandomStreams
 from theano.tensor import nnet
 
-from blocks.bricks.base import application, _Brick, Brick, lazy
-from blocks.roles import add_role, PARAMETER, WEIGHT, BIAS
 from blocks.bricks import Random, MLP, Initializable
-from blocks.utils import pack, shared_floatx_zeros
+from blocks.bricks.base import application, _Brick, Brick, lazy
+from blocks.extensions import SimpleExtension
+from blocks.roles import add_role, PARAMETER, WEIGHT, BIAS
 from blocks.select import Selector
+from blocks.utils import pack, shared_floatx_zeros
 
 from . import logsumexp, logplusexp
 from .distributions import bernoulli
 from .prob_layers import ProbabilisticTopLayer, ProbabilisticLayer
+
+import dwzest.inferenceByEMC_Montreal as dwzest
 
 logger = logging.getLogger(__name__)
 floatX = theano.config.floatX
@@ -228,7 +233,7 @@ class RBMTopLayer(Initializable, ProbabilisticTopLayer):
         """ Return gradients and reconstruction cross entropy to monitor progress.
         """
 
-        # Calculate gradients 
+        # Calculate gradients
         def grads(v):
             cost = -self.unnorm_log_prob(v).mean()
 
@@ -238,7 +243,7 @@ class RBMTopLayer(Initializable, ProbabilisticTopLayer):
                 (self.W, theano.grad(cost, self.W, consider_constant=[v])),
             ))
 
-          
+
         # gradients for the positive phase
         grads_pos = grads(v)
 
@@ -278,3 +283,80 @@ class RBMTopLayer(Initializable, ProbabilisticTopLayer):
             grads[k]  = grads_pos[k] - grads_neg[k]
 
         return grads
+
+#-------------------------------------------------------------------------------
+
+
+class EstimateLogZ(SimpleExtension):
+    def __init__(self, rbm, n_samples=100, st_sweeps=100, st_replica=100, **kwargs):
+        kwargs.setdefault("before_first_epoch", True)
+        kwargs.setdefault("after_training", True)
+        kwargs.setdefault("on_interrupt", True)
+
+        self.rbm = rbm
+        self.n_samples = n_samples
+        self.st_sweeps = st_sweeps
+        self.st_replica = st_replica
+
+        self.inv_temp_old = [f/10 for f in range(11)]
+
+        super(EstimateLogZ, self).__init__(**kwargs)
+
+    def estimate_log_z(self):
+        b = self.rbm.b.get_value()
+        c = self.rbm.c.get_value()
+        W = self.rbm.W.get_value()
+
+        b = [float(f) for f in list(b)]
+        c = [float(f) for f in list(c)]
+        W = [[float(f) for f in list(r)] for r in list(W)]
+
+        logger.info("Estimating log Z: using old schedule")
+        seed = numpy.random.randint(1, 255)
+        ret = dwzest.calcLogZ_RBM_Qubo(
+                            b, c, W,
+                            self.inv_temp_old,
+                            seed=seed,
+                            nSweepsBeyondBurnIn=self.n_samples,
+                            burnIn=None,
+                            evaluateEvery=1)
+        log_z_old = ret[-1]
+
+        logger.info("Estimating log Z: selecting temnperatures")
+        seed = numpy.random.randint(1, 255)
+        inv_temp = dwzest.selectEMCTemperatures1_RBM_Qubo(
+                            b, c, W,
+                            seed=seed,
+                            annealSweeps=self.st_sweeps,
+                            annealReplica=self.st_replica,
+                            targetER=0.5)
+        self.inv_temp = inv_temp
+
+        logger.info("Estimating log Z: using old schedule")
+        seed = numpy.random.randint(1, 255)
+        ret = dwzest.calcLogZ_RBM_Qubo(
+                            b, c, W,
+                            inv_temp,
+                            seed=seed,
+                            nSweepsBeyondBurnIn=self.n_samples,
+                            burnIn=None,
+                            evaluateEvery=1)
+        log_z = ret[-1]
+
+        return log_z, log_z_old
+
+
+    def do(self, which_callback, *args):
+        cur_row = self.main_loop.log.current_row
+
+        log_z, log_z_old = self.estimate_log_z()
+
+        cur_row['log_z'] = log_z
+        cur_row['log_z_old'] = log_z_old
+
+        # add new entries
+        for key, value in cur_row.items():
+            if not "_unnorm" in key:
+                continue
+            new_entry = key.replace("_unnorm", "")
+            cur_row[new_entry] = value + log_z
