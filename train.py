@@ -17,7 +17,7 @@ import fuel
 import theano
 import numpy as np
 
-import blocks.extras
+# import blocks.extras
 import blocks
 
 from argparse import ArgumentParser
@@ -58,7 +58,11 @@ from helmholtz.rws import ReweightedWakeSleep
 from helmholtz.vae import VAE
 
 from helmholtz.nade import NADETopLayer
-from helmholtz.rbm import RBMTopLayer
+from helmholtz.rbm import RBMTopLayer, EstimateLogZ
+
+
+est_z = __import__("est-z-rbm")
+ComputeLogZ = est_z.ComputeLogZ
 
 
 floatX = theano.config.floatX
@@ -153,7 +157,26 @@ def main(args):
                                 args.deterministic_layers,
                                 deterministic_act, deterministic_size)
 
-        # XXX replace top level with something more interesting XXX
+        # replace top level with something more interesting
+        model = ReweightedWakeSleep(
+                p_layers,
+                q_layers,
+                qbaseline=(not args.no_qbaseline),
+            )
+        model.initialize()
+    elif args.method == 'rws-hrbm':
+        sizes_tag = args.layer_spec.replace(",", "-")
+        qbase = "" if not args.no_qbaseline else "noqb-"
+
+        name = "%s-%s-%s-%slr%s-dl%d-spl%d-h%d-cd%d-%s" % \
+            (args.data, args.method, args.name, qbase, lr_tag, args.deterministic_layers, args.n_samples, args.dim_h, args.cd_iterations, sizes_tag)
+
+        p_layers, q_layers = create_layers(
+                                args.layer_spec, x_dim,
+                                args.deterministic_layers,
+                                deterministic_act, deterministic_size)
+
+        # replace top level with something more interesting
         top_size = p_layers[-1].dim_X
 
         # p_layers[-1] = NADETopLayer(
@@ -162,9 +185,8 @@ def main(args):
         #                 **inits)
         rbm = RBMTopLayer(
                         dim_x=top_size,
-                        dim_h=20,
-                        cd_iterations=10,
-                        pcd=None,
+                        dim_h=args.dim_h,
+                        cd_iterations=args.cd_iterations,
                         name="p_top_rbm",
                         weights_init=IsotropicGaussian(std=0.01),
                         biases_init=Constant(0.0))
@@ -226,25 +248,13 @@ def main(args):
     valid_monitors = []
     test_monitors = []
     for s in [1, 10, 100, 1000]:
-        log_p, log_ph = model.log_likelihood(x, s)
+        log_p, _ = model.log_likelihood(x, s)
         log_p  = -log_p.mean()
-        log_ph = -log_ph.mean()
-        log_p.name  = "log_p_%d" % s
-        log_ph.name = "log_ph_%d" % s
+        log_p.name  = "log_p_%d_unnorm" % s
 
         #train_monitors += [log_p, log_ph]
-        #valid_monitors += [log_p, log_ph]
-        test_monitors += [log_p, log_ph]
-
-    #------------------------------------------------------------
-    # Z estimation
-    #for s in [100000]:
-    #    z2 = tensor.exp(model.estimate_log_z2(s)) / s
-    #    z2.name = "z2_%d" % s
-    #
-    #    valid_monitors += [z2]
-    #    test_monitors += [z2]
-
+        #valid_monitors += [log_p]
+        test_monitors += [log_p]
 
     #------------------------------------------------------------
     # Gradient and training monitoring
@@ -259,15 +269,13 @@ def main(args):
         valid_monitors += [log_p_bound, named(model.kl_term.mean(), 'kl_term'), named(model.recons_term.mean(), 'recons_term')]
         test_monitors  += [log_p_bound, named(model.kl_term.mean(), 'kl_term'), named(model.recons_term.mean(), 'recons_term')]
     else:
-        log_p, log_ph, gradients = model.get_gradients(x, args.n_samples)
+        log_p, _, gradients = model.get_gradients(x, args.n_samples)
         log_p  = -log_p.mean()
-        log_ph = -log_ph.mean()
-        log_p.name  = "log_p"
-        log_ph.name = "log_ph"
-        cost = log_ph
+        log_p.name  = "log_p_unnorm"
+        cost = log_p
 
-        train_monitors += [log_p, log_ph]
-        valid_monitors += [log_p, log_ph]
+        train_monitors += [log_p]
+        valid_monitors += [log_p]
 
 
     #------------------------------------------------------------
@@ -355,6 +363,14 @@ def main(args):
                     #    after_epoch=False,
                     #    after_batch=False,
                     #    every_n_epochs=half_lr),
+                    EstimateLogZ(
+                        rbm,
+                        n_samples=100,
+                        st_sweeps=2000,
+                        st_replica=1000,
+                        after_epoch=False,
+                        after_training=True,
+                        every_n_epochs=10),
                     TrackTheBest('valid_%s' % cost.name),
                     Checkpoint(name+".pkl", save_separately=['log', 'model']),
                     FinishIfNoImprovementAfter('valid_%s_best_so_far' % cost.name, epochs=args.patience),
@@ -428,6 +444,23 @@ if __name__ == "__main__":
                 default=0, help="Deterministic hidden layers per stochastic layer")
     subparser.add_argument("layer_spec", type=str,
                 default="200,200,200", help="Comma seperated list of layer sizes")
+
+    # Reweighted Wake-Sleep with RBM prior
+    subparser = subparsers.add_parser("rws-hrbm",
+                help="Reweighted Wake-Sleep with top level RBM")
+    subparser.add_argument("--nsamples", "-s", type=int, dest="n_samples",
+                default=10, help="Number of IS samples")
+    subparser.add_argument("--no-qbaseline", "--nobase", action="store_true",
+                default=False, help="Deactivate 1/n_samples baseline for Q gradients")
+    subparser.add_argument("--deterministic-layers", type=int, dest="deterministic_layers",
+                default=0, help="Deterministic hidden layers per stochastic layer")
+    subparser.add_argument("--dim-h", type=int, dest="dim_h",
+                default=20, help="Hidden units in the top-level RBM")
+    subparser.add_argument("--cd-iterations", type=int, default=5,
+                help="Number of CD iterations for training")
+    subparser.add_argument("layer_spec", type=str,
+                default="200,200,200", help="Comma seperated list of layer sizes")
+
 
     # Bidirection HM
     subparser = subparsers.add_parser("bihm-rws",

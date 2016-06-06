@@ -322,7 +322,7 @@ class EstimateLogZ(SimpleExtension):
                             evaluateEvery=1)
         log_z_old = ret[-1]
 
-        logger.info("Estimating log Z: selecting temnperatures")
+        logger.info("Estimating log Z: selecting temp. schedule (sweeps=%d, replica=%d)" % (self.st_sweeps, self.st_replica))
         seed = numpy.random.randint(1, 255)
         inv_temp = dwzest.selectEMCTemperatures1_RBM_Qubo(
                             b, c, W,
@@ -332,7 +332,7 @@ class EstimateLogZ(SimpleExtension):
                             targetER=0.5)
         self.inv_temp = inv_temp
 
-        logger.info("Estimating log Z: using old schedule")
+        logger.info("Estimating log Z: using new schedule")
         seed = numpy.random.randint(1, 255)
         ret = dwzest.calcLogZ_RBM_Qubo(
                             b, c, W,
