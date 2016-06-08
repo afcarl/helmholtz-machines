@@ -167,9 +167,10 @@ def main(args):
     elif args.method == 'rws-hrbm':
         sizes_tag = args.layer_spec.replace(",", "-")
         qbase = "" if not args.no_qbaseline else "noqb-"
+        chimera = "" if not args.chimera else "chimera-"
 
-        name = "%s-%s-%s-%slr%s-dl%d-spl%d-h%d-cd%d-%s" % \
-            (args.data, args.method, args.name, qbase, lr_tag, args.deterministic_layers, args.n_samples, args.dim_h, args.cd_iterations, sizes_tag)
+        name = "%s-%s-%s-%s%slr%s-dl%d-spl%d-h%d-cd%d-%s" % \
+            (args.data, args.method, args.name, chimera, qbase, lr_tag, args.deterministic_layers, args.n_samples, args.dim_h, args.cd_iterations, sizes_tag)
 
         p_layers, q_layers = create_layers(
                                 args.layer_spec, x_dim,
@@ -187,6 +188,7 @@ def main(args):
                         dim_x=top_size,
                         dim_h=args.dim_h,
                         cd_iterations=args.cd_iterations,
+                        chimera=args.chimera,
                         name="p_top_rbm",
                         weights_init=IsotropicGaussian(std=0.01),
                         biases_init=Constant(0.0))
@@ -361,17 +363,18 @@ def main(args):
                         n_samples=100,
                         st_sweeps=1000,
                         st_replica=500,
+                        before_training=False,
                         after_epoch=False,
                         after_training=False,
                         every_n_epochs=10),
-                    EstimateLogZ(
-                        rbm,
-                        n_samples=1000,
-                        st_sweeps=10000,
-                        st_replica=1000,
-                        after_epoch=False,
-                        before_training=False,
-                        after_training=True),
+                    # EstimateLogZ(
+                    #     rbm,
+                    #     n_samples=1000,
+                    #     st_sweeps=10000,
+                    #     st_replica=1000,
+                    #     after_epoch=False,
+                    #     before_training=False,
+                    #     after_training=True),
                     TrackTheBest('valid_%s' % cost.name),
                     Checkpoint(name+".pkl", save_separately=['log', 'model']),
                     FinishIfNoImprovementAfter('valid_%s_best_so_far' % cost.name, epochs=args.patience),
@@ -459,6 +462,8 @@ if __name__ == "__main__":
                 default=20, help="Hidden units in the top-level RBM")
     subparser.add_argument("--cd-iterations", type=int, default=5,
                 help="Number of CD iterations for training")
+    subparser.add_argument("--chimera", action="store_true",
+                default=False, help="Use Chimera architecture")
     subparser.add_argument("layer_spec", type=str,
                 default="200,200,200", help="Comma seperated list of layer sizes")
 

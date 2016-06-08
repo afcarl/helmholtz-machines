@@ -17,11 +17,12 @@ from blocks.bricks.base import application, _Brick, Brick, lazy
 from blocks.extensions import SimpleExtension
 from blocks.roles import add_role, PARAMETER, WEIGHT, BIAS
 from blocks.select import Selector
-from blocks.utils import pack, shared_floatx_zeros
+from blocks.utils import pack, shared_floatx, shared_floatx_zeros
 
 from . import logsumexp, logplusexp
 from .distributions import bernoulli
 from .prob_layers import ProbabilisticTopLayer, ProbabilisticLayer
+from .chimera_mask import make_chimera_mask
 
 import dwzest.inferenceByEMC_Montreal as dwzest
 
@@ -40,12 +41,13 @@ def sigmoid(val):
 
 class RBMTopLayer(Initializable, ProbabilisticTopLayer):
     """ Top level RBM """
-    def __init__(self, dim_x, dim_h=None, cd_iterations=5, pcd_training=False, persistent_samples=100, persistent_iterations=5, **kwargs):
+    def __init__(self, dim_x, dim_h=None, cd_iterations=5, pcd_training=False, persistent_samples=100, persistent_iterations=5, chimera=False, **kwargs):
         super(RBMTopLayer, self).__init__(**kwargs)
 
         if dim_h is None:
             dim_h = dim_x
 
+        self.chimera = chimera
         self.dim_x = dim_x
         self.dim_h = dim_h
 
@@ -58,6 +60,8 @@ class RBMTopLayer(Initializable, ProbabilisticTopLayer):
         self.b = shared_floatx_zeros((self.dim_x,), name="b")            # visible bias
         self.c = shared_floatx_zeros((self.dim_h,), name="c")            # hidden bias
         self.W = shared_floatx_zeros((self.dim_x, self.dim_h), name="W") # weights
+        self.mask = shared_floatx_zeros((self.dim_x, self.dim_h), name="mask")  # mask
+
         self.parameters = [self.b, self.c, self.W]
 
         if self.persistent_samples is not None:
@@ -67,6 +71,11 @@ class RBMTopLayer(Initializable, ProbabilisticTopLayer):
         self.biases_init.initialize(self.b, self.rng)
         self.biases_init.initialize(self.c, self.rng)
         self.weights_init.initialize(self.W, self.rng)
+
+        if self.chimera:
+            mask = make_chimera_mask(8, 8, 8).astype(floatX)
+            self.mask.set_value(mask)
+            self.W.set_value(mask * self.W.get_value())
 
     @application(inputs=['h', 'beta'], outputs=['pv'])
     def prob_v_given_h(self, h, beta=1.):
@@ -80,7 +89,7 @@ class RBMTopLayer(Initializable, ProbabilisticTopLayer):
 
     @application(inputs=['v', 'h'], outputs='E')
     def energy(self, v, h):
-        """ Rrturn the energy E = -vWh -vb - hc
+        """ Return the energy E = -vWh -vb - hc
 
         Parameters
         ----------
@@ -272,7 +281,6 @@ class RBMTopLayer(Initializable, ProbabilisticTopLayer):
         else:
             self.pcd_updates = []
 
-
         #unnorm_log_prob = -self.unnorm_log_prob(v).mean()
         #recons_xentropy = tensor.sum(v * tensor.log(pv) + (1-v) * tensor.log(1-pv), axis=1)
         #recons_xentropy.name = "recons_xentropy"
@@ -281,6 +289,9 @@ class RBMTopLayer(Initializable, ProbabilisticTopLayer):
         grads = OrderedDict()
         for k, v in grads_pos.items():
             grads[k]  = grads_pos[k] - grads_neg[k]
+
+        if self.chimera:
+            grads[self.W] = self.mask * grads[self.W]
 
         return grads
 
