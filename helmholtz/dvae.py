@@ -135,8 +135,8 @@ class DVAE(HelmholtzMachine, Random):
         prior_prob = self.p_top.sample_expected()
 
         per_dim_kl = (
-                   prior_prob  * (tensor.log(  prior_prob)-tensor.log(  z_prob)) +
-                (1-prior_prob) * (tensor.log(1-prior_prob)-tensor.log(1-z_prob))
+                   z_prob  * (tensor.log(z_prob)-tensor.log(prior_prob)) +
+                (1 - z_prob) * (tensor.log(1 - z_prob)-tensor.log(1 - prior_prob))
         )
         kl_term = per_dim_kl.sum(axis=1)
         kl_term.name = 'kl_term'
